@@ -1424,75 +1424,215 @@ function barRows(items) {
    ============================================================ */
 
 function sceneSvg() {
-  const blue = "var(--blue)", orange = "var(--orange)", green = "var(--green)";
-  const buildings = [[60, 90, 90, 110], [180, 120, 70, 80], [700, 110, 80, 90], [880, 80, 100, 120]];
-  const windows = buildings.map(([x, y, w, h]) => {
-    let out = "";
-    for (let r = y + 10; r < y + h - 8; r += 16) {
-      for (let c = x + 10; c < x + w - 10; c += 16) out += `<rect class="window" x="${c}" y="${r}" width="7" height="9" rx="1"/>`;
+  const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const anim = state.playing && !still;
+
+  /* 背景远楼 */
+  const skyline = [
+    [8, 158, 54, 64], [70, 146, 40, 76], [118, 166, 46, 56],
+    [250, 150, 38, 72], [296, 162, 52, 60], [380, 140, 34, 82],
+    [640, 152, 44, 70], [700, 164, 38, 58], [760, 144, 46, 78],
+    [980, 156, 40, 66], [1030, 148, 54, 74],
+  ].map(([x, y, w, h]) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="skyline"/>`).join("");
+
+  /* 主楼：不同高矮 + 亮灯窗格 + 楼顶天线 */
+  const buildings = [
+    { x: 62, y: 92, w: 96, h: 108, floors: 5, cols: 5, antenna: true },
+    { x: 176, y: 126, w: 68, h: 74, floors: 4, cols: 4 },
+    { x: 700, y: 116, w: 82, h: 84, floors: 4, cols: 5 },
+    { x: 880, y: 82, w: 100, h: 118, floors: 6, cols: 5, antenna: true },
+  ];
+  const windows = buildings.map((b, bi) => {
+    let s = "";
+    const gx = b.w / (b.cols + 0.6), gy = b.h / (b.floors + 0.8);
+    for (let r = 1; r <= b.floors; r++) {
+      for (let c = 1; c <= b.cols; c++) {
+        const lit = (bi * 5 + r * 3 + c * 7) % 6 < 2;
+        s += `<rect x="${(b.x + c * gx - 3).toFixed(1)}" y="${(b.y + r * gy - 4).toFixed(1)}" width="5.5" height="7" rx="1" class="win${lit ? " lit" : ""}"/>`;
+      }
     }
-    return out;
+    return s;
   }).join("");
+  const roofs = buildings.map((b) => `<rect x="${b.x - 3}" y="${b.y - 5}" width="${b.w + 6}" height="5" rx="1.5" class="roof"/>`).join("");
+  const antennas = buildings.filter((b) => b.antenna).map((b) => {
+    const cx = b.x + b.w / 2;
+    return `<line x1="${cx}" y1="${b.y - 5}" x2="${cx}" y2="${b.y - 26}" class="antenna"/>
+      <circle cx="${cx}" cy="${b.y - 27}" r="2" class="antenna-dot"/>`;
+  }).join("");
+
+  /* 树：树干 + 三层树冠 + 地面阴影 */
+  const tree = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">
+    <ellipse cx="0" cy="10" rx="13" ry="3.4" class="tree-shadow"/>
+    <rect x="-2" y="-6" width="4" height="16" rx="1.6" class="trunk"/>
+    <circle cx="0" cy="-12" r="12" class="crown c1"/>
+    <circle cx="-7" cy="-7" r="8.5" class="crown c2"/>
+    <circle cx="7" cy="-7" r="8" class="crown c3"/>
+  </g>`;
+  const trees = tree(168, 182, 1) + tree(636, 184, 0.86) + tree(1006, 178, 1.05);
+
+  /* 人物：头像 + 肩线 + 外环 */
+  const person = (x, y, cls, color, extra) => `<g class="person ${cls}" transform="translate(${x} ${y})">
+    <circle r="15.5" class="avatar-bg"/>
+    <circle r="15.5" class="avatar-ring" stroke="${color}"/>
+    <circle cy="-4.6" r="4.2" fill="${color}"/>
+    <path d="M-7.6 9.2c0-4.2 3.4-7.2 7.6-7.2s7.6 3 7.6 7.2z" fill="${color}"/>
+    ${extra || ""}
+  </g>`;
+
+  const evePulse = anim ? `<circle class="pulse" r="19"/>` : "";
+  const alice = person(250, 160, "legal", "var(--blue)", `<circle class="tx" r="17"/>`);
+  const bob = person(846, 160, "legal", "var(--blue)", `<circle class="tx" r="17"/>`);
+  const eve = person(548, 262, "eve", "var(--orange)", evePulse);
+
+  /* 密钥流：裁剪窗口内循环滚动的比特带 */
+  const tape = (x, y, bits, id) => {
+    const viewW = 86, periodW = bits.length * 7.3;
+    const full = (bits + bits + bits).split("").join("");
+    const animXml = anim
+      ? `<animateTransform attributeName="transform" type="translate" from="0 0" to="${(-periodW).toFixed(1)} 0" dur="${(bits.length * 0.42).toFixed(1)}s" repeatCount="indefinite"/>`
+      : "";
+    return `<g class="tape">
+      <clipPath id="clip-${id}"><rect x="${x - viewW / 2}" y="${y - 10}" width="${viewW}" height="18" rx="4"/></clipPath>
+      <rect x="${x - viewW / 2}" y="${y - 10}" width="${viewW}" height="18" rx="4" class="tape-bg"/>
+      <g clip-path="url(#clip-${id})">
+        <g><text class="tape-text" x="${x - viewW / 2 + 3}" y="${y + 3.5}" textLength="${(periodW * 3).toFixed(1)}" lengthAdjust="spacingAndGlyphs">${full}</text>${animXml}</g>
+      </g>
+    </g>`;
+  };
+  const tapeAlice = tape(250, 196, "101100101100", "a");
+  const tapeBob = tape(846, 196, "101100101100", "b");
+  const tapeEve = tape(548, 300, "011010011001", "e");
+
+  /* 汽车：车身 + 车窗 + 车轮 + 车灯 */
+  const carG = `<g class="car-group">
+    <g class="car">
+      <ellipse cx="0" cy="17" rx="30" ry="4" class="car-shadow"/>
+      <path d="M-30 2c0-4 2-6 6-6h12l8-9h14l8 9h10c4 0 6 2 6 6v7c0 3-2 5-5 5h-54c-3 0-5-2-5-5z" class="car-body"/>
+      <path d="M-8 -4h12l6 7h-20z" class="car-glass"/>
+      <path d="M8 -4h10l6 7h-14z" class="car-glass"/>
+      <circle cx="-16" cy="12" r="5.2" class="car-wheel"/><circle cx="-16" cy="12" r="2.2" class="car-hub"/>
+      <circle cx="16" cy="12" r="5.2" class="car-wheel"/><circle cx="16" cy="12" r="2.2" class="car-hub"/>
+      <circle cx="30" cy="1" r="2.2" class="car-lamp"/>
+    </g>
+    ${anim ? `<animateTransform attributeName="transform" type="translate" from="-90 214" to="1190 214" dur="11s" repeatCount="indefinite"/>` : `<animateTransform attributeName="transform" type="translate" from="470 214" to="470 214" dur="1s" repeatCount="1" fill="freeze"/>`}
+  </g>`;
+
+  /* 链路箭头（沿路径移动） */
+  const arrow = (pathId, dur, color, begin) => anim
+    ? `<polygon class="arrow" points="-4.6,-4 5.4,0 -4.6,4" fill="${color}">
+         <animateMotion dur="${dur}s" begin="${begin || 0}s" repeatCount="indefinite" rotate="auto"><mpath href="#${pathId}"/></animateMotion>
+       </polygon>`
+    : "";
+
+  /* 电磁波纹：沿链路浮动的弧线 */
+  const wave = (x, y, delay) => `<path class="wave" d="M${x} ${y} q 4.5 -6 9 0 t 9 0" style="animation-delay:${delay}s"/>`;
+  const waves = anim
+    ? wave(360, 156, 0) + wave(500, 156, 0.9) + wave(700, 156, 1.8) + wave(880, 156, 2.6)
+    : "";
+
+  /* RIS 面板：9x9 单元，错峰闪烁 */
+  const risCells = (() => {
+    let s = "";
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 6; c++) {
+        const x = 530 + c * 6.4, y = 66 + r * 6.4;
+        s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="4.4" height="4.4" rx="0.8" class="ris-cell" style="animation-delay:${((r + c) * 0.12).toFixed(2)}s"/>`;
+      }
+    }
+    return s;
+  })();
+
   const ris = state.risOn
-    ? `<g class="ris-group"><line class="path-ris" x1="250" y1="180" x2="550" y2="96" stroke="${green}" stroke-width="1.5" fill="none"/>
-       <line class="path-ris" x1="550" y1="96" x2="850" y2="180" stroke="${green}" stroke-width="1.5" fill="none"/>
-       <rect class="ris-box" x="530" y="76" width="40" height="40" rx="3" stroke-width="1.5"/>
-       <rect class="ris-cell" x="535" y="81" width="6" height="6"/><rect class="ris-cell" x="546" y="81" width="6" height="6"/><rect class="ris-cell" x="557" y="81" width="6" height="6"/>
-       <rect class="ris-cell" x="535" y="92" width="6" height="6"/><rect class="ris-cell" x="546" y="92" width="6" height="6"/><rect class="ris-cell" x="557" y="92" width="6" height="6"/>
-       <rect class="ris-cell" x="535" y="103" width="6" height="6"/><rect class="ris-cell" x="546" y="103" width="6" height="6"/><rect class="ris-cell" x="557" y="103" width="6" height="6"/>
-       <text x="550" y="70" text-anchor="middle" class="label" font-size="12">RIS</text></g>`
+    ? `<g class="ris-group">
+        <path id="risA" class="path-ris" d="M266 152 L530 96" fill="none"/>
+        <path id="risB" class="path-ris" d="M570 96 L830 152" fill="none"/>
+        <rect class="ris-frame" x="528" y="64" width="44" height="44" rx="5"/>
+        ${risCells}
+        <circle class="ris-glow" cx="550" cy="86" r="26"/>
+        <text x="550" y="54" text-anchor="middle" class="label">RIS</text>
+        ${arrow("risA", 3.6, "var(--green)", 0.4)}
+        ${arrow("risB", 3.6, "var(--green)", 1.6)}
+      </g>`
     : "";
+
   const jam = state.jamOn
-    ? `<g class="jam-group"><circle cx="470" cy="214" r="6" class="jam"/><path d="M470 208l-6-10M470 208l6-10" stroke="${orange}" stroke-width="1.5" fill="none"/>
-       <text x="470" y="240" text-anchor="middle" class="label" font-size="12">干扰源</text></g>`
+    ? `<g class="jam-group">
+        <circle cx="470" cy="228" r="6" class="jam"/>
+        <path d="M470 221l-7-11M470 221l7-11" stroke="var(--orange)" stroke-width="1.6" fill="none"/>
+        <text x="470" y="252" text-anchor="middle" class="label" font-size="12">干扰源</text>
+      </g>`
     : "";
-  const flow = state.playing
-    ? `<circle class="flow-dot" r="3"><animateMotion dur="4.6s" repeatCount="indefinite"><mpath href="#legalPath"/></animateMotion></circle>
-       <circle class="flow-dot" r="2.2" opacity="0.55"><animateMotion dur="4.6s" begin="1.6s" repeatCount="indefinite"><mpath href="#legalPath"/></animateMotion></circle>`
-    : "";
-  return `<svg viewBox="0 0 1100 300" role="img" aria-label="城市环境中 Alice 与 Bob 通信，Eve 被动窃听，可选 RIS 反射与干扰源">
+
+  return `<svg viewBox="0 0 1100 334" role="img" aria-label="城市环境中 Alice 与 Bob 通信，Eve 被动窃听，可选 RIS 反射与干扰源">
     <defs>
-      <linearGradient id="gLegal" x1="0" y1="0" x2="1" y2="0">
+      <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#eef4fb"/><stop offset="0.65" stop-color="#e4ecf6"/><stop offset="1" stop-color="#dfe8f3"/>
+      </linearGradient>
+      <linearGradient id="gLegal" gradientUnits="userSpaceOnUse" x1="266" y1="160" x2="830" y2="160">
         <stop offset="0" stop-color="#1a4a86"/><stop offset="0.55" stop-color="#2563a8"/><stop offset="1" stop-color="#2aa8c4"/>
+      </linearGradient>
+      <linearGradient id="bldgGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c4d2e3"/><stop offset="1" stop-color="#a9bad0"/>
+      </linearGradient>
+      <linearGradient id="treeGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#4f9d84"/><stop offset="1" stop-color="#2f7a63"/>
+      </linearGradient>
+      <linearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c3d0e0"/><stop offset="1" stop-color="#b2c1d5"/>
       </linearGradient>
       <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
         <feGaussianBlur stdDeviation="2.4" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
     </defs>
-    <rect x="0" y="0" width="1100" height="300" fill="none"/>
-    ${buildings.map((b) => `<rect class="building" x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="2"/>`).join("")}
+
+    <rect x="0" y="0" width="1100" height="334" fill="url(#skyGrad)"/>
+    <g class="clouds">
+      <ellipse cx="180" cy="48" rx="46" ry="12"/><ellipse cx="212" cy="42" rx="30" ry="10"/>
+      <ellipse cx="820" cy="62" rx="54" ry="13"/><ellipse cx="788" cy="56" rx="30" ry="9"/>
+    </g>
+    ${skyline}
+
+    ${buildings.map((b) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="3" class="bldg"/>`).join("")}
+    ${roofs}
+    ${antennas}
     ${windows}
-    <g>
-      <rect class="road" x="0" y="196" width="1100" height="52"/>
-      <line class="dash" x1="0" y1="222" x2="1100" y2="222"/>
-      <rect class="car" x="470" y="206" width="34" height="14" rx="3"/>
-      <circle cx="480" cy="222" r="4" fill="var(--base)"/><circle cx="496" cy="222" r="4" fill="var(--base)"/>
+
+    ${trees}
+
+    <g class="street">
+      <rect x="0" y="196" width="1100" height="56" fill="url(#roadGrad)"/>
+      <rect x="0" y="196" width="1100" height="3" class="curb"/>
+      <line x1="0" y1="224" x2="1100" y2="224" class="lane"/>
+      <rect x="0" y="252" width="1100" height="82" class="sidewalk"/>
     </g>
-    <g>
-      <rect x="150" y="168" width="4" height="26" fill="var(--green)" opacity="0.5"/><circle cx="152" cy="164" r="10" class="tree"/>
-      <rect x="610" y="168" width="4" height="26" fill="var(--green)" opacity="0.5"/><circle cx="612" cy="164" r="10" class="tree"/>
-      <rect x="980" y="160" width="4" height="30" fill="var(--green)" opacity="0.5"/><circle cx="982" cy="155" r="12" class="tree"/>
-    </g>
-    <circle cx="250" cy="180" r="12" class="node-legal" stroke-width="2"/>
-    <path d="M250 174v6M244 177h12M250 192v4M246 196h8" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
-    <text x="250" y="158" text-anchor="middle" class="label">Alice</text>
-    <text x="250" y="212" text-anchor="middle" class="bits">101100</text>
-    <circle cx="850" cy="180" r="12" class="node-legal" stroke-width="2"/>
-    <path d="M850 174v6M844 177h12M850 192v4M846 196h8" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
-    <text x="850" y="158" text-anchor="middle" class="label">Bob</text>
-    <text x="850" y="212" text-anchor="middle" class="bits">101100</text>
-    <path id="legalPath" class="path-legal" d="M262 180 H838" fill="none"/>
-    ${flow}
-    <circle class="pulse" cx="560" cy="252" r="13"/>
-    <circle cx="560" cy="252" r="12" class="node-eve" stroke-width="2"/>
-    <path d="M560 246v6M554 249h12M560 264v4M556 268h8" stroke="var(--orange)" stroke-width="1.5" fill="none"/>
-    <text x="560" y="234" text-anchor="middle" class="label">Eve</text>
-    <text x="560" y="284" text-anchor="middle" class="bits">011010</text>
-    <line class="path-eve" x1="262" y1="186" x2="548" y2="248" stroke="${orange}" stroke-width="1.5" fill="none"/>
-    <line class="path-eve" x1="838" y1="186" x2="572" y2="248" stroke="${orange}" stroke-width="1.5" fill="none"/>
+
+    <line id="legalPath" class="path-legal-guide" x1="266" y1="160" x2="830" y2="160" stroke="none"/>
+
+    <path id="eveA" class="path-eve" d="M266 166 L536 260" fill="none"/>
+    <path id="eveB" class="path-eve" d="M830 166 L560 260" fill="none"/>
+
+    <path class="path-legal-halo" d="M266 160 H830" fill="none"/>\n    <path class="path-legal" d="M266 160 H830" fill="none"/>
+    ${waves}
+    ${arrow("legalPath", 4.2, "var(--blue-bright)", 0)}
+    ${arrow("eveA", 5.4, "var(--orange)", 0.6)}
+    ${arrow("eveB", 5.4, "var(--orange)", 2.4)}
     ${ris}
     ${jam}
+
+    ${carG}
+
+    ${alice}
+    <text x="250" y="136" text-anchor="middle" class="label">Alice</text>
+    ${tapeAlice}
+
+    ${bob}
+    <text x="846" y="136" text-anchor="middle" class="label">Bob</text>
+    ${tapeBob}
+
+    ${eve}
+    <text x="548" y="238" text-anchor="middle" class="label">Eve</text>
+    ${tapeEve}
   </svg>`;
 }
 
@@ -1968,6 +2108,8 @@ function pageBody() {
 function render() {
   document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main>${pageBody()}</main>${footer()}</div>`;
   typeset();
+  const sc = document.querySelector(".scene svg");
+  if (sc && typeof sc.pauseAnimations === "function" && !state.playing) sc.pauseAnimations();
   if (state.toast) {
     const t = document.createElement("div");
     t.className = "toast";
@@ -2021,7 +2163,17 @@ document.addEventListener("click", async (e) => {
 
   if (act === "seg") { state.seg = el.dataset.seg; render(); return; }
   if (act === "set-L") { state.L = Number(el.dataset.l) || state.L; render(); return; }
-  if (act === "play") { state.playing = !state.playing; render(); return; }
+  if (act === "play") {
+    state.playing = !state.playing;
+    const sc = document.querySelector(".scene");
+    const svg = sc && sc.querySelector("svg");
+    if (sc) sc.classList.toggle("is-paused", !state.playing);
+    if (svg && typeof svg.pauseAnimations === "function") {
+      if (state.playing) svg.unpauseAnimations(); else svg.pauseAnimations();
+    }
+    el.textContent = state.playing ? "暂停" : "继续";
+    return;
+  }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
   if (act === "clear") {

@@ -254,7 +254,8 @@ p { margin: 8px 0; }
 .scene-bar input[type="checkbox"] { accent-color: var(--blue); width: 14px; height: 14px; }
 .scene-bar .btn { min-height: 30px; padding: 4px 12px; font-size: 13px; }
 .scene svg { display: block; width: 100%; height: auto; }
-.scene .path-legal { stroke: url(#gLegal); stroke-width: 2.4; filter: url(#glow); }
+.scene .path-legal { stroke: url(#gLegal); stroke-width: 2.6; }
+.scene .path-legal-halo { stroke: var(--blue-bright); stroke-width: 9; opacity: 0.13; }
 .scene .path-eve { stroke: var(--orange); stroke-width: 1.6; stroke-dasharray: 6 5; opacity: 0.9; animation: dash 3.2s linear infinite; }
 .scene .path-ris { stroke: var(--green); stroke-width: 1.6; stroke-dasharray: 5 5; animation: dash 4.4s linear infinite; }
 .scene .node-legal { fill: var(--paper); stroke: var(--blue); stroke-width: 2.2; filter: url(#glow); }
@@ -641,3 +642,77 @@ main > *:nth-child(8) { animation-delay: 280ms; }
 .bar-track i { transform-origin: left center; animation: grow 720ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .bar-track i { animation: none; } }
+/* ============================================================
+   场景插画（总览）
+   ============================================================ */
+.scene .clouds ellipse { fill: #ffffff; opacity: 0.62; }
+.scene .skyline { fill: var(--line-strong); opacity: 0.26; }
+.scene .bldg { fill: url(#bldgGrad); }
+.scene .roof { fill: #ffffff; opacity: 0.55; }
+.scene .antenna { stroke: var(--muted); stroke-width: 1.2; opacity: 0.65; }
+.scene .antenna-dot { fill: var(--red); animation: blink 2.2s infinite; }
+.scene .win { fill: #ffffff; opacity: 0.8; }
+.scene .win.lit { fill: #f4d09a; opacity: 1; }
+.scene .tree-shadow { fill: rgba(20, 40, 60, 0.1); }
+.scene .trunk { fill: #8a6a4f; }
+.scene .crown { fill: url(#treeGrad); }
+.scene .crown.c2 { opacity: 0.92; }
+.scene .crown.c3 { opacity: 0.86; }
+.scene .curb { fill: #ffffff; opacity: 0.5; }
+.scene .lane { stroke: #ffffff; stroke-width: 2.4; stroke-dasharray: 16 12; opacity: 0.85; }
+.scene .sidewalk { fill: var(--paper); opacity: 0.5; }
+
+.scene .avatar-bg { fill: var(--paper); }
+.scene .avatar-ring { fill: none; stroke-width: 2.2; filter: url(#glow); }
+.scene .tx {
+  fill: none; stroke: var(--blue-bright); stroke-width: 1; opacity: 0.3;
+  transform-box: fill-box; transform-origin: center;
+  animation: txPulse 2.8s ease-out infinite;
+}
+
+.scene .car-shadow { fill: rgba(20, 40, 60, 0.18); }
+.scene .car-body { fill: var(--blue); }
+.scene .car-glass { fill: #d6e8fa; opacity: 0.92; }
+.scene .car-wheel { fill: #26313f; }
+.scene .car-hub { fill: #cfd8e5; }
+.scene .car-lamp { fill: #ffe9a8; filter: url(#glow); }
+
+.scene .tape-bg { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+.scene .tape-text { font: 11px var(--font-mono); fill: var(--muted); letter-spacing: 0.4px; }
+.scene .arrow { filter: url(#glow); }
+.scene .wave {
+  fill: none; stroke: var(--blue-bright); stroke-width: 1.4; opacity: 0;
+  animation: wavePulse 3.4s ease-out infinite;
+}
+.scene .ris-frame { fill: none; stroke: var(--green); stroke-width: 1.6; }
+.scene .ris-cell { fill: var(--green); opacity: 0.45; animation: cellPulse 2.6s ease-in-out infinite; }
+.scene .ris-glow {
+  fill: none; stroke: var(--green); stroke-width: 0.9; opacity: 0.25;
+  transform-box: fill-box; transform-origin: center;
+  animation: risGlow 3.2s ease-in-out infinite;
+}
+
+@keyframes blink { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
+@keyframes txPulse {
+  0% { transform: scale(0.9); opacity: 0.45; }
+  70% { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes wavePulse {
+  0% { opacity: 0; transform: translateX(-6px); }
+  25% { opacity: 0.85; }
+  100% { opacity: 0; transform: translateX(10px); }
+}
+@keyframes cellPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.95; }
+}
+@keyframes risGlow {
+  0%, 100% { opacity: 0.15; transform: scale(0.96); }
+  50% { opacity: 0.4; transform: scale(1.06); }
+}
+.scene.is-paused .tx,
+.scene.is-paused .wave,
+.scene.is-paused .ris-cell,
+.scene.is-paused .ris-glow,
+.scene.is-paused .antenna-dot { animation-play-state: paused; }
