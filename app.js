@@ -45,6 +45,8 @@ const state = {
   risOn: true,
   rounds: [],
   active: 0,
+  obsT: 0,
+  obsPlay: false,
   playing: true,
   slots: {},
   L: 4,
@@ -188,18 +190,26 @@ function parseCsi(text) {
     const sec = Number(hm[0]) * 3600 + Number(hm[1]) * 60 + Number(hm[2]);
     if (!Number.isFinite(sec)) { bad++; continue; }
     let sum = 0, cnt = 0, ok = true;
+    const mags = [];
     for (let i = 8; i + 1 < p.length; i += 4) {
       const I = Number(p[i]);
       const Q = Number(p[i + 1]);
       if (!Number.isFinite(I) || !Number.isFinite(Q)) { ok = false; break; }
-      sum += Math.hypot(I, Q);
+      const mg = Math.hypot(I, Q);
+      sum += mg;
+      mags.push(mg);
       cnt++;
     }
     if (!ok || !cnt) { bad++; continue; }
     const v = sum / cnt;
     const cur = acc.get(sec);
-    if (cur) { cur.s += v; cur.n++; }
-    else acc.set(sec, { s: v, n: 1 });
+    if (cur) {
+      cur.s += v; cur.n++;
+      for (let k = 0; k < mags.length && k < cur.p.length; k++) cur.p[k] += mags[k];
+      cur.m++;
+    } else {
+      acc.set(sec, { s: v, n: 1, p: mags.slice(), m: 1 });
+    }
     if (!t0) t0 = clock;
     t1 = clock;
     good++;
@@ -207,7 +217,7 @@ function parseCsi(text) {
   if (!good) return { ok: false, error: bad ? "没有可用的时刻或 CSI 数值" : "空文件" };
   const secs = [...acc.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([t, o]) => ({ t, v: o.s / o.n, n: o.n }));
+    .map(([t, o]) => ({ t, v: o.s / o.n, n: o.n, prof: o.p.map((x) => x / o.m) }));
   return { ok: true, rows: good, bad, t0, t1, secs };
 }
 
@@ -277,7 +287,6 @@ async function importFiles(fileList) {
     const isTs = key !== "upload";
     state.rounds.push({
       id: newRoundId(),
-      name: isTs ? `会话 ${key.replace("_", " ")}` : (state.rounds.length ? `上传 ${state.rounds.length + 1}` : "上传数据"),
       detail: isTs ? key.replace("_", " ") : `${g.files} 个文件`,
       source: "upload",
       slots: g.slots,
@@ -322,7 +331,6 @@ async function loadSample() {
     const prev = state.rounds.findIndex((r) => r.source === "sample");
     const round = {
       id: prev >= 0 ? state.rounds[prev].id : newRoundId(),
-      name: "真实示例",
       detail: "2026-10-08 会话",
       source: "sample",
       slots,
@@ -374,16 +382,21 @@ function synthSeries(N, rho, seed) {
   return { ue, nb, eve, rnd };
 }
 
-function synthCsiText(vals, rnd, tag) {
+function synthCsiText(vals, rnd, tag, ph0) {
   const pad2 = (n) => String(n).padStart(2, "0");
   const base = 10 * 3600;
+  const K = 16;
   return vals.map((v, t) => {
-    const m = 1500 + 160 * v;
+    const m = 1500 + 120 * v;
     const out = [];
-    for (let k = 0; k < 2; k++) {
+    const phase = ph0 == null ? 0 : ph0;
+    const slow = 0.55 + 0.45 * Math.sin(t / 37 + 0.8 + phase);
+    for (let k = 0; k < K; k++) {
+      const ripple = 1 + 0.42 * Math.sin((2 * Math.PI * k) / 8 + Math.sin(t / 23 + phase) * 2.2 + phase) * slow;
+      const amp = m * ripple;
       const ph = rnd() * Math.PI * 2;
-      const I = Math.round(m * Math.cos(ph));
-      const Q = Math.round(m * Math.sin(ph));
+      const I = Math.round(amp * Math.cos(ph));
+      const Q = Math.round(amp * Math.sin(ph));
       out.push(I, Q, I, Q);
     }
     const sec = base + t;
@@ -432,6 +445,8 @@ function setActive(i) {
   state.synthetic = r.source === "synthetic";
   invalidate();
   snapBlock();
+  state.obsT = 0;
+  stopObsPlay();
   try {
     const A = hasAnalog() ? session().align : null;
     if (A) state.pSeconds = A.span;
@@ -478,24 +493,24 @@ function roundStats(r) {
 /* ---------- 合成演示：一次生成多轮 ---------- */
 
 const SYNTH_ROUNDS = [
-  { name: "方案 A", N: 1800, rho: 0.94, seed: 20261008 },
-  { name: "方案 B", N: 1200, rho: 0.92, seed: 20261009 },
-  { name: "方案 C", N: 900, rho: 0.96, seed: 20261010 },
-  { name: "方案 D", N: 600, rho: 0.90, seed: 20261011 },
+  { N: 1800, rho: 0.94, seed: 20261008 },
+  { N: 1200, rho: 0.92, seed: 20261009 },
+  { N: 900, rho: 0.96, seed: 20261010 },
+  { N: 600, rho: 0.90, seed: 20261011 },
 ];
 
-function buildSynthRound(cfg) {
+function buildSynthRound(cfg, idx) {
   const g = synthSeries(cfg.N, cfg.rho, cfg.seed);
   const keyA = synthKeyText(107, g.rnd);
   const keyE = synthKeyText(99, g.rnd);
   const slots = {};
   const jobs = [
-    ["ueCsi", `${cfg.name}-Alice-csi.csv`, "csi", synthCsiText(g.ue, g.rnd, "PDSCH")],
-    ["nbCsi", `${cfg.name}-Bob-csi.csv`, "csi", synthCsiText(g.nb, g.rnd, "PUSCH")],
-    ["eveCsi", `${cfg.name}-Eve-csi.csv`, "csi", synthCsiText(g.eve, g.rnd, "PEsch")],
-    ["ueKey", `${cfg.name}-Alice-key.txt`, "key", keyA],
-    ["nbKey", `${cfg.name}-Bob-key.txt`, "key", keyA],
-    ["eveKey", `${cfg.name}-Eve-key.txt`, "key", keyE],
+    ["ueCsi", `R${idx + 1}-Alice-csi.csv`, "csi", synthCsiText(g.ue, g.rnd, "PDSCH", 0)],
+    ["nbCsi", `R${idx + 1}-Bob-csi.csv`, "csi", synthCsiText(g.nb, g.rnd, "PUSCH", 0.35)],
+    ["eveCsi", `R${idx + 1}-Eve-csi.csv`, "csi", synthCsiText(g.eve, g.rnd, "PEsch", 2.6)],
+    ["ueKey", `R${idx + 1}-Alice-key.txt`, "key", keyA],
+    ["nbKey", `R${idx + 1}-Bob-key.txt`, "key", keyA],
+    ["eveKey", `R${idx + 1}-Eve-key.txt`, "key", keyE],
   ];
   for (const [id, name, kind, text] of jobs) {
     const parsed = kind === "csi" ? parseCsi(text) : parseKey(text);
@@ -503,7 +518,6 @@ function buildSynthRound(cfg) {
   }
   return {
     id: newRoundId(),
-    name: cfg.name,
     detail: `${cfg.N} s · ρ ${cfg.rho.toFixed(2)}`,
     source: "synthetic",
     slots,
@@ -512,7 +526,7 @@ function buildSynthRound(cfg) {
 
 function loadSynth() {
   const keep = state.rounds.filter((r) => r.source !== "synthetic");
-  const synth = SYNTH_ROUNDS.map(buildSynthRound);
+  const synth = SYNTH_ROUNDS.map((c, i) => buildSynthRound(c, i));
   state.rounds = [...synth, ...keep];
   setActive(0);
   state.scrollFit = false;
@@ -537,10 +551,20 @@ function session() {
     const span = common.length ? common[common.length - 1] - common[0] + 1 : 0;
     const series = {};
     present.forEach((p, i) => { series[p] = common.map((t) => maps[i].get(t)); });
+    const profMaps = present.map((p) => new Map(csi[p].secs.map((o) => [o.t, o.prof])));
+    const prof = {};
+    let K = Infinity;
+    present.forEach((p, i) => {
+      prof[p] = common.map((t) => profMaps[i].get(t));
+      const first = prof[p].find((x) => x && x.length);
+      if (first) K = Math.min(K, first.length);
+    });
     align = {
       present,
       common,
       series,
+      prof,
+      K: Number.isFinite(K) ? K : 0,
       ratio: common.length / minLen,
       span,
       gap: span ? (span - common.length) / span : 1,
@@ -1805,6 +1829,94 @@ function pageHome() {
    11. 评估设置
    ============================================================ */
 
+/* ---------- 场景示意（随选择变化） ---------- */
+function sceneMini() {
+  const env = state.env;
+  const attack = state.attack;
+  const ris = state.ris === "有";
+  const motion = state.motion;
+
+  const envBg = env === "室内"
+    ? `<g>
+        <rect x="18" y="18" width="484" height="204" rx="12" fill="var(--paper)" opacity="0.55" stroke="var(--line-strong)"/>
+        <rect x="40" y="38" width="104" height="66" rx="4" fill="var(--pale)" stroke="var(--line-strong)"/>
+        <line x1="92" y1="38" x2="92" y2="104" stroke="var(--line-strong)"/>
+        <line x1="40" y1="71" x2="144" y2="71" stroke="var(--line-strong)"/>
+        <rect x="376" y="176" width="96" height="10" rx="4" fill="var(--line-strong)" opacity="0.45"/>
+        <path d="M396 176v-26c0-9 7-16 16-16s16 7 16 16v26" fill="none" stroke="var(--green)" stroke-width="1.6" opacity="0.55"/>
+      </g>`
+    : env === "车载"
+      ? `<g>
+          <rect x="0" y="176" width="520" height="56" fill="var(--line-strong)" opacity="0.3"/>
+          <line x1="0" y1="204" x2="520" y2="204" stroke="var(--paper)" stroke-width="2" stroke-dasharray="16 14"/>
+          <g transform="translate(24,128)">
+            <rect x="0" y="16" width="96" height="30" rx="9" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.4"/>
+            <path d="M14 16 L26 2 H70 L82 16" fill="var(--pale)" stroke="var(--blue)" stroke-width="1.2"/>
+            <circle cx="22" cy="48" r="7" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.5"/>
+            <circle cx="74" cy="48" r="7" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.5"/>
+          </g>
+        </g>`
+      : `<g>
+          <rect x="26" y="62" width="74" height="106" rx="3" fill="var(--line-strong)" opacity="0.35"/>
+          <rect x="112" y="86" width="56" height="82" rx="3" fill="var(--line-strong)" opacity="0.26"/>
+          <rect x="352" y="72" width="62" height="96" rx="3" fill="var(--line-strong)" opacity="0.28"/>
+          <rect x="428" y="52" width="70" height="116" rx="3" fill="var(--line-strong)" opacity="0.35"/>
+          <rect x="0" y="168" width="520" height="16" fill="var(--line-strong)" opacity="0.3"/>
+          <circle cx="196" cy="150" r="9" fill="var(--green)" opacity="0.4"/>
+          <rect x="194" y="156" width="3" height="14" fill="var(--green)" opacity="0.5"/>
+        </g>`;
+
+  const speed = motion === "静止"
+    ? ""
+    : `<g stroke="var(--blue)" stroke-width="1.2" opacity="0.45" stroke-linecap="round">
+        <line x1="${motion === "高速" ? 92 : 104}" y1="112" x2="122" y2="112"/>
+        <line x1="${motion === "高速" ? 84 : 100}" y1="120" x2="122" y2="120"/>
+        ${motion === "高速" ? '<line x1="100" y1="128" x2="122" y2="128"/>' : ""}
+      </g>`;
+
+  const eveLinks = attack === "被动窃听"
+    ? `<line x1="176" y1="112" x2="252" y2="180" stroke="var(--orange)" stroke-width="1.5" stroke-dasharray="6 5"/>
+       <line x1="344" y1="112" x2="288" y2="180" stroke="var(--orange)" stroke-width="1.5" stroke-dasharray="6 5"/>`
+    : `<g>
+        <circle cx="260" cy="120" r="7" fill="var(--red)"/>
+        <path d="M260 113v-12M250 120h-12M270 120h12" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M238 96a30 30 0 0 1 44 0M230 86a42 42 0 0 1 60 0" fill="none" stroke="var(--red)" stroke-width="1.2" opacity="0.55"/>
+        <line x1="260" y1="132" x2="260" y2="146" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="3 3"/>
+      </g>`;
+
+  const risGroup = ris
+    ? `<g>
+        <line x1="176" y1="112" x2="256" y2="52" stroke="var(--green)" stroke-width="1.4" stroke-dasharray="5 5"/>
+        <line x1="344" y1="112" x2="264" y2="52" stroke="var(--green)" stroke-width="1.4" stroke-dasharray="5 5"/>
+        <rect x="240" y="32" width="40" height="40" rx="4" fill="var(--paper)" stroke="var(--green)" stroke-width="1.6"/>
+        ${[0, 1, 2].map((r) => [0, 1, 2].map((c) => `<rect x="${246 + c * 10}" y="${38 + r * 10}" width="6" height="6" fill="var(--green)" opacity="0.75"/>`).join("")).join("")}
+        <text x="260" y="26" text-anchor="middle" font-size="11" fill="var(--muted)">RIS</text>
+      </g>`
+    : "";
+
+  return `<div class="scene scene-mini"><svg viewBox="0 0 520 240" role="img" aria-label="场景示意：${esc(env)}，${esc(attack)}">
+    ${envBg}
+    ${risGroup}
+    <line x1="176" y1="112" x2="344" y2="112" stroke="url(#gLegalMini)" stroke-width="2.4"/>
+    <defs>
+      <linearGradient id="gLegalMini" gradientUnits="userSpaceOnUse" x1="176" y1="112" x2="360" y2="112">
+        <stop offset="0" stop-color="#1a4a86"/><stop offset="1" stop-color="#2aa8c4"/>
+      </linearGradient>
+    </defs>
+    ${eveLinks}
+    ${speed}
+    <circle cx="160" cy="112" r="14" fill="var(--paper)" stroke="var(--blue)" stroke-width="2.4"/>
+    <circle cx="360" cy="112" r="14" fill="var(--paper)" stroke="var(--blue)" stroke-width="2.4"/>
+    <circle cx="260" cy="196" r="14" fill="var(--paper)" stroke="var(--orange)" stroke-width="2.4"/>
+    <text x="160" y="90" text-anchor="middle" font-size="14" fill="var(--ink)">Alice</text>
+    <text x="360" y="90" text-anchor="middle" font-size="14" fill="var(--ink)">Bob</text>
+    <text x="260" y="224" text-anchor="middle" font-size="14" fill="var(--ink)">Eve</text>
+    <text x="160" y="140" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">101100</text>
+    <text x="360" y="140" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">101100</text>
+    <text x="260" y="176" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">011010</text>
+  </svg></div>`;
+}
+
 function fieldSelect(label, key, opts) {
   return `<label>${label}<select data-field="${key}">${opts.map((o) => `<option value="${esc(o)}" ${state[key] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
 }
@@ -1900,7 +2012,7 @@ function roundTable() {
     const active = i === state.active;
     return `<tr class="round-row ${active ? "active" : ""}" data-act="round" data-idx="${i}">
       <td>
-        <div class="round-name">${esc(r.name)}${active ? ` ${tag("当前", "info")}` : ""}</div>
+        <div class="round-name">第 ${i + 1} 轮${active ? ` ${tag("当前", "info")}` : ""}</div>
         <div class="round-meta">${SOURCE_LABEL[r.source] || "—"}${r.detail ? ` · ${esc(r.detail)}` : ""}</div>
       </td>
       <td class="round-spark">${sparkline(s.spark)}</td>
@@ -1944,25 +2056,36 @@ function pageInput() {
   const totalPassed = sums.reduce((acc, x) => acc + (x.passed || 0), 0);
   const totalChecks = sums.reduce((acc, x) => acc + (x.checks || 0), 0);
 
-  const obs = A ? (() => {
-    const n = Math.min(60, A.common.length);
+  const K = A ? A.K : 0;
+  const nT = A ? A.common.length : 0;
+  const tIdx = Math.min(Math.max(state.obsT || 0, 0), Math.max(0, nT - 1));
+  const obs = A && K ? (() => {
     const series = A.present.map((p) => ({
       name: PARTY_LABEL[p],
       color: p === "ue" ? cv("--blue", "#2563a8") : p === "nb" ? cv("--green", "#2f8a72") : cv("--orange", "#c1602c"),
-      xs: Array.from({ length: n }, (_, i) => i),
-      ys: A.series[p].slice(0, n),
+      xs: Array.from({ length: K }, (_, k) => k + 1),
+      ys: Array.from({ length: K }, (_, k) => {
+        const pr = A.prof[p][tIdx];
+        return pr && Number.isFinite(pr[k]) ? pr[k] : null;
+      }),
     }));
     const all = [];
     series.forEach((s) => s.ys.forEach((v) => { if (Number.isFinite(v)) all.push(v); }));
     const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-    const padY = (hi - lo) * 0.08 || 1;
+    const padY = (hi - lo) * 0.12 || 1;
     return lineChart(series, {
-      label: "观测预览", w: 1040, h: 230,
+      label: "子载波观测", w: 1040, h: 240,
       yMin: lo - padY, yMax: hi + padY, yTicks: 5,
-      xTickEvery: Math.max(1, Math.round(n / 6)),
-      xLabel: "时间（秒）", yLabel: "CSI 幅度",
+      xTickEvery: Math.max(1, Math.round(K / 8)),
+      xLabel: "子载波序号", yLabel: "CSI 幅度",
     });
   })() : "";
+  const obsBar = A && K ? `<div class="obs-bar">
+    <button class="btn ghost" data-act="obs-step" data-d="-1">上一秒</button>
+    <span class="obs-clock">${num(tIdx + 1)} / ${num(nT)} 秒</span>
+    <button class="btn ghost" data-act="obs-step" data-d="1">下一秒</button>
+    <button class="btn ${state.obsPlay ? "primary" : ""}" data-act="obs-play">${state.obsPlay ? "暂停" : "播放"}</button>
+  </div>` : "";
 
   const emptyBlock = `<div class="empty-block">
     <h3>还没有载入数据</h3>
@@ -1979,16 +2102,19 @@ function pageInput() {
     <button class="btn primary" data-jump="results">查看分析</button>
   </div>
 
-  ${card("场景与攻击", `<div class="form">
-    ${fieldSelect("环境", "env", ["室内", "室外", "车载"])}
-    ${fieldSelect("移动状态", "motion", ["静止", "低速", "高速"])}
-    ${fieldSelect("可重构智能表面（RIS）", "ris", ["无", "有"])}
-    ${fieldSelect("攻击模型", "attack", ["被动窃听", "主动攻击"])}
-    ${fieldSelect("协商信道", "channel", ["已认证", "未认证"])}
-    <label>特征<div class="field-pair">
-      <select data-field="feature">${["CSI", "RSSI"].map((o) => `<option value="${o}" ${state.feature === o ? "selected" : ""}>${o}</option>`).join("")}</select>
-      ${state.feature === "CSI" ? `<select data-field="csiUse">${["幅度", "相位", "复数值"].map((o) => `<option value="${o}" ${state.csiUse === o ? "selected" : ""}>${o}</option>`).join("")}</select>` : ""}
-    </div></label>
+  ${card("场景与攻击", `<div class="scene-config">
+    <div class="scene-form"><div class="form">
+      ${fieldSelect("环境", "env", ["室内", "室外", "车载"])}
+      ${fieldSelect("移动状态", "motion", ["静止", "低速", "高速"])}
+      ${fieldSelect("可重构智能表面（RIS）", "ris", ["无", "有"])}
+      ${fieldSelect("攻击模型", "attack", ["被动窃听", "主动攻击"])}
+      ${fieldSelect("协商信道", "channel", ["已认证", "未认证"])}
+      <label>特征<div class="field-pair">
+        <select data-field="feature">${["CSI", "RSSI"].map((o) => `<option value="${o}" ${state.feature === o ? "selected" : ""}>${o}</option>`).join("")}</select>
+        ${state.feature === "CSI" ? `<select data-field="csiUse">${["幅度", "相位", "复数值"].map((o) => `<option value="${o}" ${state.csiUse === o ? "selected" : ""}>${o}</option>`).join("")}</select>` : ""}
+      </div></label>
+    </div></div>
+    ${sceneMini()}
   </div>`)}
 
   ${card("数据", `
@@ -2001,16 +2127,16 @@ function pageInput() {
     ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 14px">本站为公开演示版，<b>未附带实测采集数据</b>。可用「载入合成演示」体验完整流程，或上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>` : ""}
     ${!state.rounds.length ? emptyBlock : `
       <div class="stats" style="margin-bottom:16px">
-        ${stat("轮次", `${state.rounds.length} <small>轮</small>`, "可分别选用", "info")}
-        ${stat("合计采集", `${num(totalSpan)} <small>秒</small>`, "各轮相加", "mute")}
-        ${stat("合计密钥", `${num(totalBits)} <small>bit</small>`, "各轮相加", "mute")}
-        ${stat("检查通过项", `${totalPassed} / ${totalChecks}`, "各轮合计", totalPassed === totalChecks ? "ok" : "mute")}
+        ${stat("轮次", `${state.rounds.length} <small>轮</small>`, "", "info")}
+        ${stat("合计采集", `${num(totalSpan)} <small>秒</small>`, "", "mute")}
+        ${stat("合计密钥", `${num(totalBits)} <small>bit</small>`, "", "mute")}
+        ${stat("检查通过项", `${totalPassed} / ${totalChecks}`, "", totalPassed === totalChecks ? "ok" : "mute")}
       </div>
       ${roundTable()}
       <div class="divider"></div>
       <div class="round-detail-head">
         <h3>当前轮次文件</h3>
-        <span class="meta">${r ? esc(r.name) : ""}${r && r.detail ? ` · ${esc(r.detail)}` : ""}</span>
+        <span class="meta">${r ? `第 ${state.active + 1} 轮` : ""}${r && r.detail ? ` · ${esc(r.detail)}` : ""}</span>
       </div>
       ${slotStrip()}
     `}`)}
@@ -2019,7 +2145,7 @@ function pageInput() {
     <div class="charts">
       <div class="plot"><h3>模拟域</h3>${checkTable(analogChecks())}</div>
       <div class="plot"><h3>数字域</h3>${checkTable(digitalChecks())}</div>
-    </div>`, r ? tag(r.name, "info") : "")}
+    </div>`, r ? tag(`第 ${state.active + 1} 轮`, "info") : "")}
 
   ${card("分析参数", `<div class="form">
     ${fieldNumber(`模拟域块长 L（秒）`, "L", 'min="1" step="1"')}
@@ -2033,7 +2159,7 @@ function pageInput() {
     ${fieldNumber("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
   </div>`)}
 
-  ${A ? card("观测预览", obs, r ? tag(r.name, "info") : "") : ""}
+  ${A ? card("观测预览", obsBar + obs, r ? tag(`第 ${state.active + 1} 轮`, "info") : "") : ""}
   `;
 }
 
@@ -2044,7 +2170,7 @@ function pageInput() {
 function roundPicker() {
   if (state.rounds.length <= 1) return "";
   return `<label class="round-pick">轮次
-    <select data-round-select>${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+    <select data-round-select>${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>第 ${i + 1} 轮</option>`).join("")}</select>
   </label>`;
 }
 
@@ -2180,7 +2306,7 @@ function pageResults() {
       ${card(null, emptyBox("还没有数据", `<p>先在「评估设置」导入三方数据，或载入示例 / 合成演示。</p><p><button class="btn primary" data-jump="input">去评估设置</button></p>`))}`;
   }
   const ar = activeRound();
-  const src = ar ? `${ar.name} · ${state.rounds.length} 轮中第 ${state.active + 1} 轮` : "无数据";
+  const src = ar ? `第 ${state.active + 1} 轮 / 共 ${state.rounds.length} 轮` : "无数据";
   const segs = [["analog", "模拟域"], ["digital", "数字域"], ["final", "最终密钥"]];
   const segBody = state.seg === "analog"
     ? (hasAnalog() ? segAnalog() : card(null, emptyBox("还缺信道数据", "<p>模拟域需要 Alice、Bob 两方（最好三方）的 CSI/RSSI。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
@@ -2335,6 +2461,25 @@ function render() {
   }
 }
 
+/* ---------- 观测预览：逐秒播放 ---------- */
+let _obsTimer = null;
+function stopObsPlay() {
+  if (_obsTimer) { clearInterval(_obsTimer); _obsTimer = null; }
+  state.obsPlay = false;
+}
+function toggleObsPlay() {
+  if (state.obsPlay) { stopObsPlay(); render(); return; }
+  state.obsPlay = true;
+  render();
+  _obsTimer = setInterval(() => {
+    const A = hasAnalog() ? session().align : null;
+    const n = A ? A.common.length : 0;
+    if (state.tab !== "input" || !n) { stopObsPlay(); if (state.tab === "input") render(); return; }
+    state.obsT = (state.obsT + 1) % n;
+    render();
+  }, 700);
+}
+
 function toast(msg) { state.toast = msg; render(); }
 
 function fingerprint() {
@@ -2396,6 +2541,15 @@ document.addEventListener("click", async (e) => {
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
   if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
+  if (act === "obs-play") { toggleObsPlay(); return; }
+  if (act === "obs-step") {
+    stopObsPlay();
+    const A = hasAnalog() ? session().align : null;
+    const n = A ? A.common.length : 0;
+    if (n) state.obsT = (state.obsT + Number(el.dataset.d) + n) % n;
+    render();
+    return;
+  }
   if (act === "clear") {
     state.rounds = [];
     state.active = 0;

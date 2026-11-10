@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    物理层密钥安全评估 · 界面样式
    设计语言：深蓝科技感 + 白纸工作区 + 微光/悬浮/渐进动效
    ============================================================ */
@@ -349,9 +349,9 @@ p { margin: 8px 0; }
 
 /* ---------- 表单 ---------- */
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px; }
-.form label { display: grid; gap: 7px; font-size: 13.5px; color: var(--muted); min-width: 0; }
+.form label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; color: var(--muted); min-width: 0; letter-spacing: 0.01em; }
 .form input, .form select {
-  width: 100%; padding: 8px 11px; min-height: 38px;
+  width: 100%; padding: 9px 11px; min-height: 40px; font-size: 14.5px;
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--paper); color: var(--ink); font: inherit;
   transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
@@ -442,11 +442,11 @@ p { margin: 8px 0; }
 .tag.info { color: var(--blue); border-color: rgba(37, 99, 168, 0.45); background: var(--pale); }
 
 /* ---------- 表格 ---------- */
-table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.data th, table.data td { padding: 10px 9px; text-align: left; border-bottom: 1px solid var(--line); }
 table.data th {
-  font-weight: 600; color: var(--muted); font-size: 12px;
-  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  font-weight: 600; color: var(--muted); font-size: 12.5px;
+  letter-spacing: 0; white-space: nowrap;
   background: linear-gradient(180deg, var(--paper-2), transparent);
 }
 table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-num); }
@@ -841,4 +841,18 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
 }
 @media (max-width: 640px) {
   .slot-strip { grid-template-columns: 1fr; }
+}
+/* ---------- 场景配置布局 ---------- */
+.scene-config { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 20px; align-items: start; }
+.scene-form .form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scene-mini { border-radius: var(--radius); overflow: hidden; }
+.scene-mini svg { width: 100%; height: auto; }
+
+/* ---------- 逐秒观测 ---------- */
+.obs-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.obs-clock { font: 600 13.5px var(--font-num); font-variant-numeric: tabular-nums; color: var(--ink); min-width: 92px; text-align: center; }
+.obs-bar .btn { min-height: 32px; padding: 4px 12px; font-size: 13px; }
+
+@media (max-width: 980px) {
+  .scene-config { grid-template-columns: 1fr; }
 }
