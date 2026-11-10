@@ -74,6 +74,7 @@ const state = {
   pPa: 256,
   pAuthBits: 128,
   pHmin: 90000,
+  pHminAuto: false,
   pSeconds: 193,
   pSucc: 100,
   history: [],
@@ -460,6 +461,7 @@ function setActive(i) {
     state.active = 0;
     state.slots = {};
     state.synthetic = false;
+    if (state.pHminAuto) { state.pHmin = 90000; state.pHminAuto = false; }
     invalidate();
     return;
   }
@@ -469,6 +471,15 @@ function setActive(i) {
   state.slots = r.slots;
   state.synthetic = r.source === "synthetic";
   invalidate();
+  // 有隐私放大前比特时，调和前熵直接用实测条件熵
+  const pre = r.pre ? preStats() : null;
+  if (pre) {
+    state.pHmin = Math.round(pre.hmin);
+    state.pHminAuto = true;
+  } else if (state.pHminAuto) {
+    state.pHmin = 90000;
+    state.pHminAuto = false;
+  }
   snapBlock();
   state.obsT = 0;
   stopObsTimer();
@@ -2496,7 +2507,7 @@ function pageInput() {
     ${fieldNumber(`模拟域块长 L（秒）`, "L", 'min="1" step="1"')}
     ${fieldNumber("原始保留比特 n", "pN", 'min="1" step="1024"')}
     ${fieldNumber("码率 r", "pRate", 'min="0.05" max="0.99" step="0.01"')}
-    ${fieldNumber(`假设的调和前熵 H̄_min（bit）`, "pHmin", 'min="0" step="1024"')}
+    ${fieldNumber(`调和前熵 H̄_min（bit）${preStats() ? " · 实测" : " · 假设"}`, "pHmin", 'min="0" step="1024"')}
     ${fieldNumber("其他公开信息（bit）", "pOther", 'min="0" step="64"')}
     ${fieldNumber(`隐私放大余量 Δ_PA（bit）`, "pPa", 'min="0" step="64"')}
     ${fieldNumber("认证预共享位数（bit）", "pAuthBits", 'min="0" step="32"')}
@@ -2919,6 +2930,7 @@ document.addEventListener("change", (e) => {
       const v = Number(el.value);
       state[k] = Number.isFinite(v) ? v : 0;
     } else state[k] = el.value;
+    if (k === "pHmin") state.pHminAuto = false;
     render();
     return;
   }
