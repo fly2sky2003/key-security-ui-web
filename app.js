@@ -1507,20 +1507,6 @@ function smoothPath(pts) {
   return d;
 }
 
-function labelChip(text, x0, midY, ink, bg) {
-  let tw = 0;
-  String(text).split("").forEach((ch) => { tw += /[\u4e00-\u9fa5]/.test(ch) ? 12.5 : 7.2; });
-  const wpx = tw + 18;
-  return `<rect x="${x0.toFixed(1)}" y="${(midY - 11).toFixed(1)}" width="${wpx.toFixed(1)}" height="22" rx="11" fill="${bg}"/>
-    <text x="${(x0 + 9).toFixed(1)}" y="${(midY + 4.5).toFixed(1)}" font-size="12.5" fill="${ink}">${esc(text)}</text>`;
-}
-
-function chipWidth(text) {
-  let tw = 0;
-  String(text).split("").forEach((ch) => { tw += /[\u4e00-\u9fa5]/.test(ch) ? 12.5 : 7.2; });
-  return tw + 18;
-}
-
 function lineChart(series, o) {
   const opt = o || {};
   const w = opt.w || 720, h = opt.h || 250;
@@ -1536,7 +1522,7 @@ function lineChart(series, o) {
   const lineC = cv("--line", "#e0e7f1");
   const inkC = cv("--ink", "#14213a");
   const mutedC = cv("--muted", "#56657e");
-  const chipBg = cv("--paper-2", "#f7f9fd");
+  const numFont = "Bahnschrift, 'Segoe UI', sans-serif";
   const gid = "cg" + (++_chartSeq);
   const smooth = !!opt.smooth;
   const baseY = pad.t + ih;
@@ -1544,24 +1530,24 @@ function lineChart(series, o) {
   const ticks = (opt.gridVals && opt.gridVals.length) ? opt.gridVals.slice() : niceTicks(yMin, yMax, opt.yTicks || 5);
   const grid = ticks.map((v) => {
     const y = yAt(v).toFixed(1);
-    return `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="${lineC}" stroke-width="1" opacity="0.75"/>
-      <text x="${pad.l - 12}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12.5" fill="${mutedC}">${tickFmt(v, span)}</text>`;
+    return `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="${lineC}" stroke-width="1" opacity="0.7"/>
+      <text x="${pad.l - 12}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12.5" font-family="${numFont}" fill="${inkC}">${tickFmt(v, span)}</text>`;
   }).join("");
 
   const every = opt.xTickEvery || 1;
   const labels = xs.map((v, i) => {
     if (i % every !== 0 && i !== xs.length - 1) return "";
-    return `<text x="${xAt(i).toFixed(1)}" y="${(baseY + 20).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
+    return `<text x="${xAt(i).toFixed(1)}" y="${(baseY + 21).toFixed(1)}" text-anchor="middle" font-size="12.5" font-family="${numFont}" fill="${inkC}">${esc(v)}</text>`;
   }).join("");
 
   const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${baseY}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1" opacity="0.9"/>
     <line x1="${pad.l}" y1="${baseY}" x2="${w - pad.r}" y2="${baseY}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1" opacity="0.9"/>`;
 
   const yChip = corner
-    ? labelChip(corner.y, pad.l - 2, pad.t - 19, inkC, chipBg)
+    ? `<text x="${pad.l}" y="${(pad.t - 20).toFixed(1)}" font-size="13.5" font-weight="600" fill="${inkC}">${esc(corner.y)}</text>`
     : (opt.yLabel ? `<text x="16" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${inkC}" transform="rotate(-90 16 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "");
   const xChip = corner
-    ? labelChip(corner.x, w - 4 - chipWidth(corner.x), baseY, inkC, chipBg)
+    ? `<text x="${w - 2}" y="${(baseY + 21).toFixed(1)}" text-anchor="end" font-size="14" font-style="italic" fill="${inkC}">${esc(corner.x)}</text>`
     : (opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "");
 
   const areas = (smooth && opt.area) ? series.map((s, k) => {
@@ -1598,17 +1584,17 @@ function lineChart(series, o) {
 
   const svgLegend = (() => {
     if (!opt.legendTop) return "";
-    const base = pad.t - 14;
+    const base = pad.t - 16;
     let lx = w - pad.r;
     const parts = [];
     for (let i = series.length - 1; i >= 0; i--) {
       const s = series[i];
       const nm = String(s.name);
-      const itemW = Math.max(18, nm.length * 7.4) + 20;
+      const itemW = Math.max(18, nm.length * 7.6) + 20;
       const x0 = lx - itemW;
-      parts.push(`<circle cx="${(x0 + 4).toFixed(1)}" cy="${(base - 4).toFixed(1)}" r="4" fill="${s.color}"/>
-        <text x="${(x0 + 14).toFixed(1)}" y="${base.toFixed(1)}" font-size="12.5" fill="${inkC}">${esc(nm)}</text>`);
-      lx = x0 - 10;
+      parts.push(`<circle cx="${(x0 + 4).toFixed(1)}" cy="${(base - 4).toFixed(1)}" r="4.5" fill="${s.color}"/>
+        <text x="${(x0 + 15).toFixed(1)}" y="${base.toFixed(1)}" font-size="13" fill="${inkC}">${esc(nm)}</text>`);
+      lx = x0 - 12;
     }
     return parts.reverse().join("");
   })();
