@@ -2912,7 +2912,6 @@ function cover() {
       </div>
       <button class="cover-btn" data-act="unlock">进入平台 ${ico("arrow-right", 18)}</button>
       <p class="cover-err" id="cover-err" role="alert"></p>
-      <p class="cover-foot">仅限内部演示使用</p>
     </div>
   </div>`;
 }
