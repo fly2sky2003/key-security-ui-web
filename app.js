@@ -39,6 +39,7 @@ function kicker(id) {
 }
 
 const state = {
+  locked: true,
   page: "scene",
   tab: "home",
   seg: "analog",
@@ -2894,7 +2895,138 @@ function startQuantTicker(root) {
   }, 620);
 }
 
+/* ============================================================
+   封面（访问口令）
+   ============================================================ */
+
+function cover() {
+  return `<div class="cover">
+    <canvas id="cover-canvas" aria-hidden="true"></canvas>
+    <div class="cover-glow" aria-hidden="true"></div>
+    <div class="cover-card">
+      <div class="cover-mark">${ico("tower", 26)}</div>
+      <h1>物理层密钥安全评估平台</h1>
+      <p class="cover-sub">请输入访问口令</p>
+      <div class="cover-field">
+        <input id="cover-pw" type="password" inputmode="latin" autocomplete="off" spellcheck="false" maxlength="12" placeholder="访问口令" aria-label="访问口令"/>
+      </div>
+      <button class="cover-btn" data-act="unlock">进入平台 ${ico("arrow-right", 18)}</button>
+      <p class="cover-err" id="cover-err" role="alert"></p>
+      <p class="cover-foot">仅限内部演示使用</p>
+    </div>
+  </div>`;
+}
+
+let coverAnim = null;
+
+function stopCoverAnim() {
+  if (coverAnim && typeof coverAnim.stop === "function") coverAnim.stop();
+  coverAnim = null;
+}
+
+function startCoverAnim() {
+  stopCoverAnim();
+  const cv = document.getElementById("cover-canvas");
+  if (!cv || !cv.getContext) return;
+  const ctx = cv.getContext("2d");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let w = 0, h = 0, raf = 0, tick = 0;
+  const resize = () => {
+    const r = cv.getBoundingClientRect();
+    w = Math.max(1, r.width);
+    h = Math.max(1, r.height);
+    cv.width = Math.floor(w * dpr);
+    cv.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  const N = Math.max(28, Math.min(60, Math.round((w * h) / 26000)));
+  const nodes = Array.from({ length: N }, () => ({
+    x: Math.random() * w, y: Math.random() * h,
+    vx: (Math.random() - 0.5) * 0.22, vy: (Math.random() - 0.5) * 0.22,
+    r: 1 + Math.random() * 1.4,
+  }));
+  const ripples = [];
+  const draw = () => {
+    tick += 1;
+    ctx.clearRect(0, 0, w, h);
+    for (let i = 0; i < N; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < N; j++) {
+        const b = nodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 190) {
+          ctx.strokeStyle = `rgba(110,175,255,${((1 - d / 190) * 0.26).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    for (const n of nodes) {
+      n.x += n.vx; n.y += n.vy;
+      if (n.x < 0 || n.x > w) n.vx *= -1;
+      if (n.y < 0 || n.y > h) n.vy *= -1;
+      ctx.fillStyle = "rgba(165,212,255,0.8)";
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (tick % 48 === 0) ripples.push({ x: Math.random() * w, y: Math.random() * h, r: 2 });
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const rp = ripples[i];
+      rp.r += 1.7;
+      ctx.strokeStyle = `rgba(90,200,230,${Math.max(0, 0.34 - rp.r / 820).toFixed(3)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+      ctx.stroke();
+      if (rp.r > 240) ripples.splice(i, 1);
+    }
+    raf = requestAnimationFrame(draw);
+  };
+  draw();
+  const onResize = () => resize();
+  window.addEventListener("resize", onResize);
+  coverAnim = { stop: () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); } };
+}
+
+function tryUnlock() {
+  const input = document.getElementById("cover-pw");
+  const val = (input ? input.value : "").trim().toUpperCase();
+  if (val === "PKG") {
+    try { sessionStorage.setItem("pkg-unlocked", "1"); } catch (e) { /* 隐私模式忽略 */ }
+    const root = document.querySelector(".cover");
+    if (root) root.classList.add("leaving");
+    state.locked = false;
+    setTimeout(() => {
+      stopCoverAnim();
+      bootData(new URLSearchParams(location.search));
+    }, 360);
+    return;
+  }
+  const root = document.querySelector(".cover");
+  if (root) {
+    root.classList.remove("shake");
+    void root.offsetWidth;
+    root.classList.add("shake");
+  }
+  const err = document.getElementById("cover-err");
+  if (err) err.textContent = "口令不正确，请重新输入";
+  if (input) { input.value = ""; input.focus(); }
+}
 function render() {
+  if (state.locked) {
+    document.getElementById("app").innerHTML = cover();
+    startCoverAnim();
+    const inp = document.getElementById("cover-pw");
+    if (inp) setTimeout(() => inp.focus(), 80);
+    return;
+  }
+  stopCoverAnim();
   document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main class="tab-${state.tab}">${pageBody()}</main>${footer()}</div>`;
   typeset();
   if (state.tab === "input" && state.obsPlay && hasAnalog()) startObsTimer();
@@ -2928,6 +3060,12 @@ function fingerprint() {
    15. 交互
    ============================================================ */
 
+document.addEventListener("keydown", (e) => {
+  if (!state.locked) return;
+  if (e.key === "Enter") { e.preventDefault(); tryUnlock(); }
+  if (e.key === "Escape") { const inp = document.getElementById("cover-pw"); if (inp) inp.value = ""; }
+});
+
 document.addEventListener("change", (e) => {
   const el = e.target;
   if (!el.dataset) return;
@@ -2954,6 +3092,7 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act],[data-tab],[data-jump]");
   if (!el) return;
   const act = el.dataset.act;
+  if (act === "unlock") { tryUnlock(); return; }
 
   if (el.dataset.tab) { if (state.tab === "input" && el.dataset.tab !== "input") stopObsTimer(); state.tab = el.dataset.tab; render(); return; }
   if (el.dataset.jump) { if (state.tab === "input" && el.dataset.jump !== "input") stopObsTimer(); state.tab = el.dataset.jump; render(); return; }
@@ -3126,6 +3265,17 @@ function exportJson() {
    16. 启动
    ============================================================ */
 
+function bootData(params) {
+  if (params.get("synth") === "1") {
+    loadSynth();
+  } else if (params.get("demo") === "1") {
+    loadSample().then(() => render()).catch(() => render());
+  } else {
+    render();
+    probeSample();
+  }
+}
+
 (function boot() {
   const params = new URLSearchParams(location.search);
   const t = params.get("tab") || params.get("page");
@@ -3147,12 +3297,7 @@ function exportJson() {
   });
   const lq = Number(params.get("L"));
   if (Number.isFinite(lq) && lq > 0) state.L = lq;
-  if (params.get("synth") === "1") {
-    loadSynth();
-  } else if (params.get("demo") === "1") {
-    loadSample().then(() => render()).catch(() => render());
-  } else {
-    render();
-    probeSample();
-  }
+  try { state.locked = sessionStorage.getItem("pkg-unlocked") !== "1"; } catch (e) { state.locked = true; }
+  if (state.locked) { render(); return; }
+  bootData(params);
 })();
