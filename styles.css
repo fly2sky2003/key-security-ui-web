@@ -936,3 +936,21 @@ main.tab-results .legend { color: var(--ink); }
 main.tab-results .meta,
 main.tab-results .hint { color: var(--ink); }
 main.tab-results .stat .n { display: none; }
+/* ---------- 图表：右上图例 + 角标 ---------- */
+.legend-top { justify-content: flex-end; margin: 0 0 6px; gap: 18px; }
+.legend-top span { font-size: 13.5px; }
+.legend-top i { width: 10px; height: 10px; }
+
+/* ---------- 块长候选：六列等宽居中 ---------- */
+table.data.block-table { table-layout: fixed; }
+table.data.block-table th,
+table.data.block-table td { width: 16.66%; text-align: center; padding-left: 8px; padding-right: 8px; }
+table.data.block-table th:nth-child(1),
+table.data.block-table td:nth-child(1) { text-align: left; padding-left: 2px; }
+table.data.block-table th:nth-child(6),
+table.data.block-table td:nth-child(6) { text-align: right; padding-right: 2px; }
+table.data.block-table td:nth-child(6) .tag { display: inline-flex; }
+
+/* ---------- 分析结果：统计卡标签不用灰字 ---------- */
+main.tab-results .stat .k { color: var(--ink); font-size: 13px; font-weight: 600; }
+main.tab-results .stat .v small { color: var(--ink); opacity: 0.75; }

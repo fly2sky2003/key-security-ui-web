@@ -1492,7 +1492,8 @@ function niceTicks(min, max, count) {
 function lineChart(series, o) {
   const opt = o || {};
   const w = opt.w || 720, h = opt.h || 250;
-  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: 16, b: opt.xLabel ? 48 : 28 };
+  const corner = opt.cornerLabels;
+  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: corner ? 30 : 16, b: (opt.xLabel || corner) ? 46 : 28 };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const yMin = opt.yMin == null ? -0.2 : opt.yMin;
   const yMax = opt.yMax == null ? 1 : opt.yMax;
@@ -1521,8 +1522,12 @@ function lineChart(series, o) {
   const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>
     <line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>`;
 
-  const xTitle = opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "";
-  const yTitle = opt.yLabel ? `<text x="16" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${inkC}" transform="rotate(-90 16 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "";
+  const xTitle = corner
+    ? `<text x="${w - pad.r}" y="${(h - pad.b - 8).toFixed(1)}" text-anchor="end" font-size="14" font-style="italic" fill="${inkC}">${esc(corner.x)}</text>`
+    : (opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "");
+  const yTitle = corner
+    ? `<text x="${pad.l + 2}" y="${pad.t - 12}" text-anchor="start" font-size="13.5" fill="${inkC}">${esc(corner.y)}</text>`
+    : (opt.yLabel ? `<text x="16" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${inkC}" transform="rotate(-90 16 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "");
 
   const paths = series.map((s) => {
     let d = "", pen = false;
@@ -1552,11 +1557,12 @@ function lineChart(series, o) {
     }))
     : "";
 
-  const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
+  const legend = `<div class="legend${opt.legendTop ? " legend-top" : ""}">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
   return `<div class="chart-wrap${opt.interactive ? " chart-interactive" : ""}" ${meta ? `data-meta="${meta}"` : ""}>
+    ${opt.legendTop ? legend : ""}
     <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${axis}${xTitle}${yTitle}${paths}${points}${hv}</svg>
     ${opt.interactive ? `<div class="chart-tip" hidden></div>` : ""}
-    ${legend}
+    ${opt.legendTop ? "" : legend}
   </div>`;
 }
 
@@ -2443,7 +2449,7 @@ function segAnalog() {
     .map(([a, b]) => ({ a, b, r: pearson(A.series[a], A.series[b]), legal: a === "ue" && b === "nb" }));
 
   return `
-  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", h: 280, yMin: -0.2, yMax: 1, markY: 0.2, points: true, interactive: true, head: "滞后", unit: "秒", xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}`)}
+  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", h: 300, yMin: -0.2, yMax: 1, markY: 0.2, points: true, interactive: true, head: "滞后", unit: "秒", cornerLabels: { y: "自相关 ρ", x: "t" }, legendTop: true })}`)}
 
   ${card("互易性", `<div class="charts" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     ${pairs.map((p) => `<div class="plot"><div class="pair-head"><span class="pair-name">${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}</span><b class="pair-r${p.legal ? "" : " eve"}">${fx(p.r, 3)}</b></div>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#2563a8") : cv("--orange", "#c1602c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
@@ -2458,8 +2464,8 @@ function segAnalog() {
   </table>`, tag(`L = ${state.L} 秒`, "info"))}
 
   ${card("信息量估计", `<div class="stats">
-    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", "", u && u.ok ? "info" : "mute")}
-    ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", "", u && u.base.D > 0 ? "info" : "mute")}
+    ${stat("块条件互信息", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", "", u && u.ok ? "info" : "mute")}
+    ${stat("互信息差", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", "", u && u.base.D > 0 ? "info" : "mute")}
     ${stat("块数", u ? `${num(u.n)} <small>每块 ${u.perBlock} 个观测</small>` : "—", "", "mute")}
     ${stat("平稳性", st ? `${st.level} <small>${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}</small>` : "—", "", st ? st.tone : "mute")}
   </div>`)}
