@@ -1854,11 +1854,6 @@ function sceneMini() {
     ${extra || ""}
   </g>`;
 
-  const tape = (x, y, bits, key) => `<g class="tape">
-    <clipPath id="mclip-${key}"><rect x="${x - 43}" y="${y - 9}" width="86" height="18" rx="4"/></clipPath>
-    <rect class="tape-bg" x="${x - 43}" y="${y - 9}" width="86" height="18" rx="4"/>
-    <g clip-path="url(#mclip-${key})"><text class="tape-text" x="${x - 39}" y="${y + 3}">${bits}${bits}</text></g>
-  </g>`;
 
   const carAt = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">
     <ellipse cx="0" cy="17" rx="30" ry="4" class="car-shadow"/>
@@ -1878,7 +1873,19 @@ function sceneMini() {
       <line x1="78" y1="54" x2="78" y2="130" stroke="var(--line-strong)" stroke-width="2"/>
       <line x1="32" y1="92" x2="124" y2="92" stroke="var(--line-strong)" stroke-width="2"/>
       <rect x="150" y="150" width="220" height="10" rx="3" fill="var(--line-strong)" opacity="0.35"/>
-      ${tree(430, 190, 0.95)}
+      <g transform="translate(398 152) scale(0.92)">
+        <rect x="0" y="46" width="120" height="9" rx="3" fill="var(--line-strong)" opacity="0.75"/>
+        <rect x="8" y="55" width="6" height="26" fill="var(--line-strong)" opacity="0.55"/>
+        <rect x="106" y="55" width="6" height="26" fill="var(--line-strong)" opacity="0.55"/>
+        <rect x="34" y="16" width="48" height="31" rx="3" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.4"/>
+        <rect x="38" y="21" width="40" height="20" rx="2" fill="var(--pale)"/>
+        <rect x="54" y="47" width="8" height="5" fill="var(--blue)"/>
+        <g transform="translate(100 34)">
+          <rect x="-8" y="0" width="16" height="9" rx="2" fill="var(--paper)" stroke="var(--line-strong)"/>
+          <line x1="-4" y1="0" x2="-4" y2="-8" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <line x1="4" y1="0" x2="4" y2="-8" stroke="var(--line-strong)" stroke-width="1.2"/>
+        </g>
+      </g>
     </g>`;
 
   /* 室外：天际线 + 楼 + 树 + 路 + 车 */
@@ -1914,21 +1921,21 @@ function sceneMini() {
 
   const bg = env === "室内" ? indoorBg : env === "车载" ? carBg : outdoorBg;
 
-  const speed = motion === "静止"
-    ? ""
-    : `<g stroke="var(--blue)" stroke-width="1.4" opacity="0.4" stroke-linecap="round">
-        <line x1="${motion === "高速" ? 74 : 88}" y1="142" x2="120" y2="142"/>
-        <line x1="${motion === "高速" ? 66 : 82}" y1="152" x2="120" y2="152"/>
-        ${motion === "高速" ? '<line x1="82" y1="162" x2="120" y2="162"/>' : ""}
-      </g>`;
 
+  const authed = state.channel === "已认证";
+  const tipY = authed ? 152 : 163;
   const eveLinks = attack === "被动窃听"
     ? `<line x1="162" y1="160" x2="248" y2="242" stroke="var(--orange)" stroke-width="1.6" stroke-dasharray="6 5"/>
        <line x1="358" y1="160" x2="272" y2="242" stroke="var(--orange)" stroke-width="1.6" stroke-dasharray="6 5"/>`
     : `<g>
-        <circle cx="260" cy="160" r="7" fill="var(--red)"/>
-        <path d="M260 153v-11M253 160h-11M267 160h11" stroke="var(--red)" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="M240 138a26 26 0 0 1 40 0M232 129a38 38 0 0 1 56 0" fill="none" stroke="var(--red)" stroke-width="1.3" opacity="0.55"/>
+        <path d="M260 232 L260 214 L251 204 L269 192 L258 180 L260 ${tipY + 12}" fill="none" stroke="var(--red)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+        <polygon points="260,${tipY} 252,${tipY + 14} 268,${tipY + 14}" fill="var(--red)"/>
+      </g>`;
+  const channelMark = authed
+    ? ""
+    : `<g>
+        <circle cx="260" cy="152" r="10" fill="var(--paper)" stroke="var(--red)" stroke-width="1.8"/>
+        <text x="260" y="157" text-anchor="middle" font-size="13" font-weight="700" fill="var(--red)">?</text>
       </g>`;
 
   const risCells = (() => {
@@ -1981,21 +1988,18 @@ function sceneMini() {
     </defs>
     ${bg}
     <path id="legalMini" class="path-legal-mini" d="M166 152 H354" fill="none" stroke="url(#gLegalMini)" stroke-width="2.6"/>
+    ${channelMark}
     ${anim ? `<polygon class="arrow" points="-4,-3.6 4.8,0 -4,3.6" fill="url(#gLegalMini)">
       <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto"><mpath href="#legalMini"/></animateMotion>
     </polygon>` : ""}
     ${ris}
     ${eveLinks}
-    ${speed}
     ${person(150, 152, "legal", "var(--blue)", anim ? `<circle class="tx" r="16.5"/>` : "")}
     ${person(370, 152, "legal", "var(--blue)")}
     ${person(260, 250, "eve", "var(--orange)", pulse)}
     <text x="150" y="128" text-anchor="middle" class="label" font-size="12">Alice</text>
     <text x="370" y="128" text-anchor="middle" class="label" font-size="12">Bob</text>
     <text x="260" y="280" text-anchor="middle" class="label" font-size="12">Eve</text>
-    ${tape(150, 192, "101100101100", "a")}
-    ${tape(370, 192, "101100101100", "b")}
-    ${tape(260, 290, "011010011001", "e")}
   </svg></div>`;
 }
 
