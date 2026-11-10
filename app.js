@@ -1328,22 +1328,47 @@ function emptyBox(title, body) {
    9. 图表（SVG）
    ============================================================ */
 
+function tickFmt(v, span) {
+  if (span >= 1000) return Math.round(v).toLocaleString("zh-CN");
+  if (span >= 10) return v.toFixed(0);
+  if (span >= 1) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function niceTicks(min, max, count) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
+  if (min === max) { min -= 1; max += 1; }
+  const raw = (max - min) / Math.max(1, (count || 5) - 1);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) out.push(Number(v.toFixed(10)));
+  return out;
+}
+
 function lineChart(series, o) {
   const opt = o || {};
   const w = opt.w || 720, h = opt.h || 240;
-  const pad = { l: opt.yLabel ? 62 : 42, r: 14, t: 12, b: opt.xLabel ? 44 : 24 };
+  const pad = { l: opt.yLabel ? 66 : 44, r: 16, t: 14, b: opt.xLabel ? 46 : 26 };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const yMin = opt.yMin == null ? -0.2 : opt.yMin;
   const yMax = opt.yMax == null ? 1 : opt.yMax;
+  const span = yMax - yMin;
   const xs = series[0].xs;
   const xAt = (i) => pad.l + (xs.length <= 1 ? 0 : (i / (xs.length - 1)) * iw);
   const yAt = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
-  const grid = (opt.gridVals || [0, 0.2, 0.5, 1]).map((v) => {
-    const dashed = Math.abs(v - (opt.markY == null ? 0.2 : opt.markY)) < 1e-9;
+  const ticks = (opt.gridVals && opt.gridVals.length) ? opt.gridVals : niceTicks(yMin, yMax, opt.yTicks || 5);
+  const grid = ticks.map((v) => {
+    const dashed = opt.markY != null && Math.abs(v - opt.markY) < 1e-9;
     return `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${dashed ? cv("--orange", "#ad643c") : cv("--line", "#dfe5ed")}" ${dashed ? 'stroke-dasharray="4 4"' : ""}/>
-      <text x="${pad.l - 8}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12" fill="${dashed ? cv("--orange", "#ad643c") : cv("--muted", "#617184")}">${v.toFixed(1)}</text>`;
+      <text x="${pad.l - 8}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="11.5" fill="${dashed ? cv("--orange", "#ad643c") : cv("--muted", "#617184")}">${tickFmt(v, span)}</text>`;
   }).join("");
-  const labels = xs.map((v, i) => `<text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 8)}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}">${esc(v)}</text>`).join("");
+  const every = opt.xTickEvery || 0;
+  const labels = xs.map((v, i) => {
+    if (every && i % every !== 0 && i !== xs.length - 1) return "";
+    return `<text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 8)}" text-anchor="middle" font-size="11.5" fill="${cv("--muted", "#617184")}">${esc(v)}</text>`;
+  }).join("");
   const xTitle = opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}">${esc(opt.xLabel)}</text>` : "";
   const yTitle = opt.yLabel ? `<text x="14" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}" transform="rotate(-90 14 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "";
   const paths = series.map((s) => {
@@ -1353,7 +1378,7 @@ function lineChart(series, o) {
       d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`;
       pen = true;
     });
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>`;
   }).join("");
   const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
   return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${xTitle}${yTitle}${paths}</svg>${legend}</div>`;
@@ -1457,12 +1482,8 @@ function sceneSvg() {
 }
 
 function pageHome() {
-  const has = hasAny();
   const p = premise();
   const d = hasKeys() ? digital() : null;
-  const dataLine = state.synthetic
-    ? `数据：合成演示（1 组，1800 秒）`
-    : (has ? `数据：当前会话（1 组，${session().align ? session().align.span + " 秒" : "—"}）` : "数据：未导入");
   return `
   <div class="page-head">
     <h2>评估原理</h2>
@@ -1477,7 +1498,6 @@ function pageHome() {
     </div>
     ${sceneSvg()}
   </div>
-  <p class="meta" style="margin-top:8px">${dataLine} · 拓扑为概念示意，不表示真实传播仿真</p>
 
   ${card("物理层密钥生成流程", `<div class="generation-grid">
     <div class="generation-step">${ico("tower")}<div class="step-label">互易信道探测</div><div class="step-output">探测信号</div></div>
@@ -1508,19 +1528,14 @@ function pageHome() {
       <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">熵下界 · 泄露记录</span></div>
       <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span></div>
       <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">安全长度 · 净速率</span></div>
-    </div>
-    <details><summary>指标说明</summary>
-      <p>X、Y、Z 分别为 Alice、Bob、Eve 的信道特征；源信息量为模型下的上界参考，不等于实际密钥速率。
-      最终长度依赖已验证的整段条件最小熵下界，扣除公开泄露 λ 与隐私放大余量 Δ。</p>
-    </details>`)}
+    </div>`)}
 
   ${card("当前评估状态", `<div class="stats">
     ${stat("评估前提", esc(p.label), `${state.attack} · 信道${state.channel}`, p.tone === "ok" ? "ok" : p.tone === "bad" ? "bad" : "mute")}
     ${stat("模拟域结论", analogConclusion() ? esc(analogConclusion().short) : "—", "信道信息量", analogConclusion() ? analogConclusion().tone : "mute")}
     ${stat("数字域结论", digitalConclusion() ? esc(digitalConclusion().short) : "—", "密钥质量", digitalConclusion() ? digitalConclusion().tone : "mute")}
     ${stat("密钥总长", d ? `${num(d.nBits)} <small>bit</small>` : "—", d ? `${num(d.lines)} 行 × ${d.width}` : "未导入", "mute")}
-  </div>
-  <p class="card-subnote">数据与参数在「评估设置」里导入和修改；两个域的定量结论在「分析结果」，汇总在「评估报告」。</p>`)}
+  </div>`)}
   `;
 }
 
@@ -1603,7 +1618,6 @@ function checkTable(items) {
 function pageInput() {
   const A = hasAnalog() ? session().align : null;
   const d = hasKeys() ? digital() : null;
-  const b = budget();
   const summary = [
     stat("三方重叠时长", A ? `${num(A.common.length)} <small>秒</small>` : "—", A ? `占采集 ${pct(A.ratio)}` : "未导入", "mute"),
     stat("采集时长", A ? `${num(A.span)} <small>秒</small>` : "—", A ? `${pct(A.gap)} 无同时数据` : "—", "mute"),
@@ -1613,13 +1627,22 @@ function pageInput() {
 
   const obs = A ? (() => {
     const n = Math.min(60, A.common.length);
-    const idx = [];
-    for (let i = 0; i < A.common.length; i += Math.max(1, Math.floor(A.common.length / n))) idx.push(i);
     const series = A.present.map((p) => ({
-      name: PARTY_LABEL[p], color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
-      xs: idx.map((i) => i), ys: idx.map((i) => A.series[p][i]),
+      name: PARTY_LABEL[p],
+      color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
+      xs: Array.from({ length: n }, (_, i) => i),
+      ys: A.series[p].slice(0, n),
     }));
-    return lineChart(series, { label: "观测预览", yMin: Math.min.apply(null, series.map((s) => Math.min.apply(null, s.ys))), yMax: Math.max.apply(null, series.map((s) => Math.max.apply(null, s.ys))), xLabel: "秒", yLabel: "特征值", gridVals: [] });
+    const all = [];
+    series.forEach((s) => s.ys.forEach((v) => { if (Number.isFinite(v)) all.push(v); }));
+    const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    const padY = (hi - lo) * 0.08 || 1;
+    return lineChart(series, {
+      label: "观测预览", w: 1040, h: 230,
+      yMin: lo - padY, yMax: hi + padY, yTicks: 5,
+      xTickEvery: Math.max(1, Math.round(n / 6)),
+      xLabel: "时间（秒）", yLabel: "CSI 幅度",
+    });
   })() : "";
 
   return `
@@ -1638,8 +1661,7 @@ function pageInput() {
       <select data-field="feature">${["CSI", "RSSI"].map((o) => `<option value="${o}" ${state.feature === o ? "selected" : ""}>${o}</option>`).join("")}</select>
       ${state.feature === "CSI" ? `<select data-field="csiUse">${["幅度", "相位", "复数值"].map((o) => `<option value="${o}" ${state.csiUse === o ? "selected" : ""}>${o}</option>`).join("")}</select>` : ""}
     </div></label>
-  </div>
-  <p class="card-subnote">攻击模型与协商信道直接参与判定；环境、移动状态、RIS 只记录场景、用于报告标明适用范围。</p>`)}
+  </div>`)}
 
   ${card("数据", `
     <div class="btn-row" style="margin-bottom:14px">
@@ -1657,8 +1679,7 @@ function pageInput() {
     <div class="charts">
       <div class="plot"><h3>模拟域</h3>${checkTable(analogChecks())}</div>
       <div class="plot"><h3>数字域</h3>${checkTable(digitalChecks())}</div>
-    </div>
-    <p class="card-subnote">未导入数据时显示为空；检查项不通过不会阻止计算，但会让对应结论降级。</p>`, tag(hasAny() ? "已检查" : "未检查", hasAny() ? "info" : ""))}
+    </div>`, tag(hasAny() ? "已检查" : "未检查", hasAny() ? "info" : ""))}
 
   ${card("分析参数", `<div class="form">
     ${fieldNumber(`模拟域块长 L（秒）`, "L", 'min="1" step="1"')}
@@ -1670,10 +1691,9 @@ function pageInput() {
     ${fieldNumber("认证预共享位数（bit）", "pAuthBits", 'min="0" step="32"')}
     ${fieldNumber("处理时长（秒）", "pSeconds", 'min="1" step="1"')}
     ${fieldNumber("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
-  </div>
-  <p class="card-subnote">改任一格，熵预算与报告立即重算；建议提取长度 ℓ_safe 当前为 <b>${num(b.safe)} bit</b>（假设输入）。</p>`)}
+  </div>`)}
 
-  ${A ? card("观测预览", `${obs}<p class="card-subnote">取对齐后的前 60 个秒级样本，仅用于确认三方是否同步、量级是否可比。</p>`) : ""}
+  ${A ? card("观测预览", obs) : ""}
   `;
 }
 
@@ -1706,13 +1726,11 @@ function segAnalog() {
     .map(([a, b]) => ({ a, b, r: pearson(A.series[a], A.series[b]), legal: a === "ue" && b === "nb" }));
 
   return `
-  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", yMin: -0.2, yMax: 1, markY: 0.2, xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}
-    <p class="card-subnote">横轴为对数刻度。ρ 首次降到 0.2 以下的滞后作为去相关时间，只是诊断依据，不能证明块间独立。</p>`)}
+  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", yMin: -0.2, yMax: 1, markY: 0.2, xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}`)}
 
   ${card("互易性", `<div class="charts" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     ${pairs.map((p) => `<div class="plot"><h3>${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}　<span class="meta">${fx(p.r, 3)}</span></h3>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#245b9a") : cv("--orange", "#ad643c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
-  </div>
-  <p class="card-subnote">合法链路应显著正相关；窃听链路应接近 0。数值为整段皮尔逊相关。</p>`)}
+  </div>`)}
 
   ${card("块长候选", `<table class="data">
     <thead><tr><th>块长</th><th class="num">ρ(L)</th><th class="num">块数</th><th>依赖覆盖</th><th>样本支撑</th><th class="num">判定</th></tr></thead>
@@ -1720,16 +1738,14 @@ function segAnalog() {
       <td><b style="font-weight:600">${b.L} s</b></td><td class="num">${fx(b.rho, 3)}</td><td class="num">${b.n}</td>
       <td class="meta">${b.cover}</td><td class="meta">${b.support}</td>
       <td class="num">${b.ok ? tag("可选", "ok") : tag("不满足", "warn")}</td></tr>`).join("")}</tbody>
-  </table>
-  <p class="card-subnote">点表格行切换当前块长；当前 L = ${state.L} 秒${rec ? `，建议块长 ${rec.L} 秒` : ""}。</p>`, tag(`L = ${state.L} 秒`, "info"))}
+  </table>`, tag(`L = ${state.L} 秒`, "info"))}
 
   ${card("信息量估计", `<div class="stats">
     ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", u ? (u.ok ? "样本充分" : "样本不足") : "无法估计", u && u.ok ? "info" : "mute")}
     ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", u && u.base.D != null ? `截断前 ${fx(u.base.raw, 3)}` : "缺 Eve 数据", u && u.base.D > 0 ? "info" : "mute")}
     ${stat("块数", u ? num(u.n) : "—", u ? `每块 ${u.perBlock} 个观测` : "—", "mute")}
     ${stat("平稳性", st ? st.level : "—", st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", st ? st.tone : "mute")}
-  </div>
-  <p class="card-subnote">U_L 与 D_L 是模型下的参考值；当块间不独立时只作描述性参考，不能当作实际密钥速率。</p>`)}
+  </div>`)}
 
   ${conclusionBlock(analogConclusion(), "模拟域 · 定量依据")}
   `;
@@ -1753,8 +1769,7 @@ function segDigital() {
       return `<tr><td>${b}</td><td class="num">${num(g.nb)}</td><td class="num">${num(g.states)}</td><td class="num">${fx(g.ratio, 1)}</td>
         <td class="num">${num(g.filled)}</td><td class="num">${fx(g.hmin, 3)}</td><td class="num">${g.marginalOk ? tag("可估", "ok") : tag("不足", "warn")}</td></tr>`;
     }).join("")}</tbody>
-  </table>
-  <p class="card-subnote">b 越大 H_min 越高，但样本/状态不足时直方图稀疏、最大频次被低估，数字不可信 —— 这张表不能横向比大小。</p>`)}
+  </table>`)}
 
   ${card("NIST SP 800-22", `<div class="stats" style="margin-bottom:12px">
     ${stat("通过", `${t.passed} / ${t.judged.length}`, "仅统计可判定项", t.passed === t.judged.length ? "ok" : "warn")}
@@ -1767,7 +1782,7 @@ function segDigital() {
       const row = `<tr class="clickable" data-act="nist" data-id="${r.id}"><td>${r.name}</td><td class="meta">${r.param || ""}</td>
         <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td><td class="num">${tag(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td></tr>`;
       return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
-    }).join("")}</tbody></table>`, `<span class="hint">点击行查看说明</span>`)}
+    }).join("")}</tbody></table>`)}
   ${conclusionBlock(digitalConclusion(), "数字域 · 定量依据")}
   `;
 }
@@ -1804,8 +1819,7 @@ function segFinal() {
       { label: "认证预共享", value: b.auth, text: `− ${num(b.auth)} bit` },
       { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
     ])}
-    ${verdict}
-    <p class="card-subnote">协议参数在「评估设置 → 分析参数」里修改；熵与码率是假设输入，不是实测值。</p>`)}
+    ${verdict}`)}
   <div class="concl mute">
     <div class="concl-head"><span class="concl-tag">只给上界，不给认证</span></div>
     <p class="concl-text">预算算的是「不超过多少 bit」，不是「至少有这么多安全熵」。真正可认证的安全长度还缺隐私放大前的量化比特。</p>
@@ -1882,16 +1896,12 @@ function pageReport() {
     { label: "隐私放大余量", value: b.pa, text: `− ${num(b.pa)} bit` },
     { label: "认证预共享", value: b.auth, text: `− ${num(b.auth)} bit` },
     { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
-  ]) + `<p class="card-subnote">第一行为假设输入；扣除项来自协议参数。这张图表示账目关系，不是统计分布。</p>`)}
+  ]))}
 
   ${card("关键发现", findings.map((f) => `<p style="margin:0 0 14px"><b style="color:var(--blue);font-weight:600;display:block;margin-bottom:3px">${f.h}</b>${f.t}</p>`).join(""))}
 
   ${card("评估项", `<table class="data"><thead><tr><th>评估项</th><th>结果</th><th class="num">状态</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")}</tbody></table>
-  <details><summary>评估依据与边界</summary>
-    <p>结论分模拟域与数字域分别给出，不支持合并为单一安全等级。熵与协议参数为假设输入；随机性检验与 KDR 只排除统计异常，不能证明密钥对 Eve 保密。</p>
-    <p>要给出「保密强度 ≥ X bit」，仍缺：① 隐私放大前的量化比特（决定 H_min(K|E)）；② 满足 ρ(L) ≤ 0.2 且块数 ≥ 30 的采集；③ Eve 侧信息量的上界。</p>
-  </details>`)}
+    <tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")}</tbody></table>`)}
 
   ${card("报告与历史", `<div class="btn-row no-print">
       <button class="btn primary" data-act="export">导出 JSON</button>
