@@ -46,7 +46,7 @@ const state = {
   rounds: [],
   active: 0,
   obsT: 0,
-  obsPlay: false,
+  obsPlay: true,
   playing: true,
   slots: {},
   L: 4,
@@ -446,7 +446,7 @@ function setActive(i) {
   invalidate();
   snapBlock();
   state.obsT = 0;
-  stopObsPlay();
+  stopObsTimer();
   try {
     const A = hasAnalog() ? session().align : null;
     if (A) state.pSeconds = A.span;
@@ -2042,7 +2042,7 @@ function analogChecks() {
     { k: "时间相关性", rule: `ρ(${probe} s) ≤ 0.2`, actual: fx(rho, 3), verdict: cover === "较完整" ? "通过" : cover, tone: cover === "较完整" ? "ok" : "warn" },
     { k: "平稳性", rule: "Δμ < 1σ 且 F < 2", actual: st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", verdict: st ? st.level : "未知", tone: st ? st.tone : "warn" },
     { k: "样本充分性", rule: `块数 n ≥ ${MIN_BLOCKS}`, actual: `${blocks[0].n}`, verdict: blocks[0].n >= MIN_BLOCKS ? "通过" : "不足", tone: blocks[0].n >= MIN_BLOCKS ? "ok" : "bad" },
-    { k: "计算可行性", rule: "闭式解，无迭代", actual: "3 变量", verdict: "可计算", tone: "ok" },
+    { k: "计算可行性", verdict: "可计算", tone: "ok" },
   ];
 }
 
@@ -2055,7 +2055,7 @@ function digitalChecks() {
     { k: "密钥装载", rule: "十六进制 · 偶长度", actual: `${num(d.lines)} 行 × ${d.width}`, verdict: "通过", tone: "ok" },
     { k: "合法方 KDR", rule: "≤ 0.3", actual: d.kdr == null ? "—" : pct(d.kdr, 2), verdict: kdrOk ? "通过" : "偏高", tone: kdrOk ? "ok" : "bad" },
     { k: "统计识别性", rule: "样本/状态 ≥ 10", actual: fx(g8.ratio, 1), verdict: g8.marginalOk ? "可估" : "不足", tone: g8.marginalOk ? "ok" : "warn" },
-    { k: "条件最小熵", rule: "需放大前比特", actual: "不可估计", verdict: "未证明", tone: "warn" },
+    { k: "条件最小熵", verdict: "不可计算", tone: "warn" },
   ];
 }
 
@@ -2064,10 +2064,9 @@ function checkList(items) {
   if (!items.length) return `<div class="empty"><h3>还没有可检查的数据</h3><p>先在下方导入三方信道与密钥。</p></div>`;
   return `<div class="check-list">${items.map((it) => `<div class="check-item ${it.tone}">
     <div class="check-main">
-      <span class="check-name">${it.k}</span>
-      <span class="check-rule">${it.rule}</span>
+      <span class="check-name">${it.k}${it.rule ? ` <span class="check-rule">${it.rule}</span>` : ""}</span>
     </div>
-    <span class="check-value">${it.actual}</span>
+    ${it.actual ? `<span class="check-value">${it.actual}</span>` : `<span></span>`}
     ${tag(it.verdict, it.tone)}
   </div>`).join("")}</div>`;
 }
@@ -2137,6 +2136,90 @@ function slotStrip() {
   }).join("")}</div>`;
 }
 
+/* ---------- 观测预览：三栏 + 逐秒刷新 ---------- */
+let _obsTimer = null;
+function obsPanelSvg(ys, color, yMin, yMax, showY) {
+  const w = 320, h = 150;
+  const pad = { l: showY ? 46 : 12, r: 10, t: 10, b: 24 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  const n = ys.length;
+  const xAt = (i) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * iw);
+  const yAt = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
+  const ticks = niceTicks(yMin, yMax, 3);
+  const grid = ticks.map((v) => `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${cv("--line", "#dfe5ed")}"/>
+    ${showY ? `<text x="${pad.l - 6}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="10.5" fill="${cv("--muted", "#617184")}">${Math.round(v)}</text>` : ""}`).join("");
+  let d = "", pen = false;
+  ys.forEach((v, i) => {
+    if (v == null || !Number.isFinite(v)) { pen = false; return; }
+    d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`;
+    pen = true;
+  });
+  const xl = `<text x="${pad.l}" y="${h - 6}" font-size="10.5" fill="${cv("--muted", "#617184")}">1</text>
+    <text x="${((pad.l + w - pad.r) / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" font-size="10.5" fill="${cv("--muted", "#617184")}">${Math.round(n / 2)}</text>
+    <text x="${w - pad.r}" y="${h - 6}" text-anchor="end" font-size="10.5" fill="${cv("--muted", "#617184")}">${n}</text>`;
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="子载波观测">
+    ${grid}<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>${xl}
+  </svg>`;
+}
+
+function obsPanels() {
+  const A = hasAnalog() ? session().align : null;
+  if (!A || !A.K) return "";
+  const K = A.K;
+  const t = Math.min(Math.max(state.obsT || 0, 0), A.common.length - 1);
+  const cols = A.present.map((p) => ({
+    name: p === "ue" ? "Alice" : p === "nb" ? "Bob" : "Eve",
+    color: p === "ue" ? cv("--blue", "#2563a8") : p === "nb" ? cv("--green", "#2f8a72") : cv("--orange", "#c1602c"),
+    ys: Array.from({ length: K }, (_, k) => {
+      const pr = A.prof[p][t];
+      return pr && Number.isFinite(pr[k]) ? pr[k] : null;
+    }),
+  }));
+  const all = [];
+  cols.forEach((c) => c.ys.forEach((v) => { if (Number.isFinite(v)) all.push(v); }));
+  const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+  const pad = (hi - lo) * 0.1 || 1;
+  return `<div class="obs-grid">${cols.map((c, i) => `<div class="obs-panel">
+    <div class="obs-head"><i style="background:${c.color}"></i>${c.name}</div>
+    ${obsPanelSvg(c.ys, c.color, lo - pad, hi + pad, i === 0)}
+  </div>`).join("")}</div>`;
+}
+
+function renderObs() {
+  const box = document.getElementById("obs-chart");
+  if (box) box.innerHTML = obsPanels();
+  const clk = document.getElementById("obs-clock");
+  const A = hasAnalog() ? session().align : null;
+  if (clk && A) clk.textContent = `${num(state.obsT + 1)} / ${num(A.common.length)} 秒`;
+  const btn = document.getElementById("obs-play-btn");
+  if (btn) {
+    btn.textContent = state.obsPlay ? "暂停" : "播放";
+    btn.classList.toggle("primary", state.obsPlay);
+  }
+}
+
+function startObsTimer() {
+  if (_obsTimer) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  _obsTimer = setInterval(() => {
+    if (state.tab !== "input" || !hasAnalog()) return;
+    const A = session().align;
+    if (!A || !A.common.length) return;
+    state.obsT = (state.obsT + 1) % A.common.length;
+    renderObs();
+  }, 700);
+}
+
+function stopObsTimer() {
+  if (_obsTimer) { clearInterval(_obsTimer); _obsTimer = null; }
+}
+
+function toggleObsPlay() {
+  state.obsPlay = !state.obsPlay;
+  if (state.obsPlay) startObsTimer(); else stopObsTimer();
+  renderObs();
+}
+
 function pageInput() {
   const A = hasAnalog() ? session().align : null;
   const d = hasKeys() ? digital() : null;
@@ -2150,34 +2233,13 @@ function pageInput() {
   const K = A ? A.K : 0;
   const nT = A ? A.common.length : 0;
   const tIdx = Math.min(Math.max(state.obsT || 0, 0), Math.max(0, nT - 1));
-  const obs = A && K ? (() => {
-    const series = A.present.map((p) => ({
-      name: PARTY_LABEL[p],
-      color: p === "ue" ? cv("--blue", "#2563a8") : p === "nb" ? cv("--green", "#2f8a72") : cv("--orange", "#c1602c"),
-      xs: Array.from({ length: K }, (_, k) => k + 1),
-      ys: Array.from({ length: K }, (_, k) => {
-        const pr = A.prof[p][tIdx];
-        return pr && Number.isFinite(pr[k]) ? pr[k] : null;
-      }),
-    }));
-    const all = [];
-    series.forEach((s) => s.ys.forEach((v) => { if (Number.isFinite(v)) all.push(v); }));
-    const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-    const padY = (hi - lo) * 0.12 || 1;
-    return lineChart(series, {
-      label: "子载波观测", w: 1040, h: 240,
-      yMin: lo - padY, yMax: hi + padY, yTicks: 5,
-      xTickEvery: Math.max(1, Math.round(K / 8)),
-      xLabel: "子载波序号", yLabel: "CSI 幅度",
-    });
-  })() : "";
-  const obsBar = A && K ? `<div class="obs-bar">
+  const obsBox = A && K ? `<div class="obs-bar">
     <button class="btn ghost" data-act="obs-step" data-d="-1">上一秒</button>
-    <span class="obs-clock">${num(tIdx + 1)} / ${num(nT)} 秒</span>
+    <span class="obs-clock" id="obs-clock">${num(tIdx + 1)} / ${num(nT)} 秒</span>
     <button class="btn ghost" data-act="obs-step" data-d="1">下一秒</button>
-    <button class="btn ${state.obsPlay ? "primary" : ""}" data-act="obs-play">${state.obsPlay ? "暂停" : "播放"}</button>
-  </div>` : "";
-
+    <button class="btn ${state.obsPlay ? "primary" : ""}" data-act="obs-play" id="obs-play-btn">${state.obsPlay ? "暂停" : "播放"}</button>
+  </div>
+  <div id="obs-chart">${obsPanels()}</div>` : "";
   const emptyBlock = `<div class="empty-block">
     <h3>还没有载入数据</h3>
     <p>支持一次载入多轮：每轮是同一时间戳下的六份文件（三方 CSI + 三方密钥）。</p>
@@ -2250,7 +2312,7 @@ function pageInput() {
     ${fieldNumber("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
   </div>`)}
 
-  ${A ? card("观测预览", obsBar + obs, r ? tag(`第 ${state.active + 1} 轮`, "info") : "") : ""}
+  ${A ? card("观测预览", obsBox, r ? tag(`第 ${state.active + 1} 轮`, "info") : "") : ""}
   `;
 }
 
@@ -2281,7 +2343,7 @@ function segAnalog() {
   const blocks = blockCandidates();
   const st = stationarity(A.series.ue);
   const acfSeries = A.present.map((p) => ({
-    name: PARTY_LABEL[p],
+    name: p === "ue" ? "Alice" : p === "nb" ? "Bob" : "Eve",
     color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
     xs: LAGS, ys: LAGS.map((L) => acfAt(A.common, A.series[p], L)),
   }));
@@ -2539,6 +2601,7 @@ function startQuantTicker(root) {
 function render() {
   document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main>${pageBody()}</main>${footer()}</div>`;
   typeset();
+  if (state.tab === "input" && state.obsPlay && hasAnalog()) startObsTimer();
   startQuantTicker(document.getElementById("app"));
   const sc = document.querySelector(".scene svg");
   if (sc && typeof sc.pauseAnimations === "function" && !state.playing) sc.pauseAnimations();
@@ -2552,24 +2615,6 @@ function render() {
   }
 }
 
-/* ---------- 观测预览：逐秒播放 ---------- */
-let _obsTimer = null;
-function stopObsPlay() {
-  if (_obsTimer) { clearInterval(_obsTimer); _obsTimer = null; }
-  state.obsPlay = false;
-}
-function toggleObsPlay() {
-  if (state.obsPlay) { stopObsPlay(); render(); return; }
-  state.obsPlay = true;
-  render();
-  _obsTimer = setInterval(() => {
-    const A = hasAnalog() ? session().align : null;
-    const n = A ? A.common.length : 0;
-    if (state.tab !== "input" || !n) { stopObsPlay(); if (state.tab === "input") render(); return; }
-    state.obsT = (state.obsT + 1) % n;
-    render();
-  }, 700);
-}
 
 function toast(msg) { state.toast = msg; render(); }
 
@@ -2613,8 +2658,8 @@ document.addEventListener("click", async (e) => {
   if (!el) return;
   const act = el.dataset.act;
 
-  if (el.dataset.tab) { state.tab = el.dataset.tab; render(); return; }
-  if (el.dataset.jump) { state.tab = el.dataset.jump; render(); return; }
+  if (el.dataset.tab) { if (state.tab === "input" && el.dataset.tab !== "input") stopObsTimer(); state.tab = el.dataset.tab; render(); return; }
+  if (el.dataset.jump) { if (state.tab === "input" && el.dataset.jump !== "input") stopObsTimer(); state.tab = el.dataset.jump; render(); return; }
 
   if (act === "seg") { state.seg = el.dataset.seg; render(); return; }
   if (act === "set-L") { state.L = Number(el.dataset.l) || state.L; render(); return; }
@@ -2634,11 +2679,12 @@ document.addEventListener("click", async (e) => {
   if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
   if (act === "obs-play") { toggleObsPlay(); return; }
   if (act === "obs-step") {
-    stopObsPlay();
+    state.obsPlay = false;
+    stopObsTimer();
     const A = hasAnalog() ? session().align : null;
     const n = A ? A.common.length : 0;
     if (n) state.obsT = (state.obsT + Number(el.dataset.d) + n) % n;
-    render();
+    renderObs();
     return;
   }
   if (act === "clear") {

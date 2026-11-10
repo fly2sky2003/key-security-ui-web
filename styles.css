@@ -871,9 +871,17 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
   border-bottom: 1px solid var(--line);
 }
 .check-item:last-child { border-bottom: 0; }
-.check-main { min-width: 0; display: grid; gap: 2px; }
-.check-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-.check-rule { font-size: 12px; color: var(--faint); letter-spacing: 0.01em; }
+.check-main { min-width: 0; }
+.check-name { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; color: var(--ink); }
+.check-rule {
+  font: 600 12.5px var(--font-ui);
+  color: var(--blue);
+  background: var(--pale);
+  border: 1px solid var(--pale-2);
+  border-radius: 999px;
+  padding: 1px 9px;
+  white-space: nowrap;
+}
 .check-value {
   font: 650 16px var(--font-num);
   font-variant-numeric: tabular-nums;
@@ -884,3 +892,18 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
 .check-item.warn .check-value { color: var(--orange); }
 .check-item.bad .check-value { color: var(--red); }
 .check-item .tag { min-width: 52px; justify-content: center; }
+/* ---------- 观测预览：三栏 ---------- */
+.obs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.obs-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--paper-2), var(--paper));
+  padding: 8px 10px 6px;
+  min-width: 0;
+}
+.obs-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.obs-head i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.obs-panel .chart { height: auto; }
+@media (max-width: 760px) {
+  .obs-grid { grid-template-columns: 1fr; }
+}
