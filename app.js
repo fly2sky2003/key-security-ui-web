@@ -1489,11 +1489,29 @@ function niceTicks(min, max, count) {
   return out;
 }
 
+let _chartSeq = 0;
+
+function smoothPath(pts) {
+  if (!pts.length) return "";
+  if (pts.length < 3) return "M" + pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L");
+  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 function lineChart(series, o) {
   const opt = o || {};
   const w = opt.w || 720, h = opt.h || 250;
   const corner = opt.cornerLabels;
-  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: corner ? 30 : 16, b: corner ? 54 : (opt.xLabel ? 48 : 28) };
+  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: corner ? (opt.legendTop ? 46 : 30) : 16, b: corner ? 54 : (opt.xLabel ? 48 : 28) };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const yMin = opt.yMin == null ? -0.2 : opt.yMin;
   const yMax = opt.yMax == null ? 1 : opt.yMax;
@@ -1504,49 +1522,104 @@ function lineChart(series, o) {
   const lineC = cv("--line", "#e0e7f1");
   const inkC = cv("--ink", "#14213a");
   const mutedC = cv("--muted", "#56657e");
+  const gid = "cg" + (++_chartSeq);
+  const smooth = !!opt.smooth;
+  const baseY = pad.t + ih;
 
-  const ticks = (opt.gridVals && opt.gridVals.length) ? opt.gridVals : niceTicks(yMin, yMax, opt.yTicks || 5);
+  const frame = opt.frame
+    ? `<rect x="${pad.l}" y="${pad.t}" width="${iw}" height="${ih}" rx="8" fill="${cv("--paper-2", "#f7f9fd")}"/>`
+    : "";
+
+  let ticks = (opt.gridVals && opt.gridVals.length) ? opt.gridVals.slice() : niceTicks(yMin, yMax, opt.yTicks || 5);
+  if (opt.markY != null && !ticks.some((v) => Math.abs(v - opt.markY) < 1e-9)) {
+    ticks.push(opt.markY);
+    ticks.sort((a, b) => a - b);
+  }
   const grid = ticks.map((v) => {
     const dashed = opt.markY != null && Math.abs(v - opt.markY) < 1e-9;
-    return `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${dashed ? cv("--orange", "#c1602c") : lineC}" stroke-width="1" ${dashed ? 'stroke-dasharray="5 4"' : ""}/>
-      <text x="${pad.l - 10}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12.5" fill="${dashed ? cv("--orange", "#c1602c") : mutedC}">${tickFmt(v, span)}</text>`;
+    const y = yAt(v).toFixed(1);
+    return `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="${dashed ? cv("--orange", "#c1602c") : lineC}" stroke-width="1" ${dashed ? 'stroke-dasharray="5 4" opacity="0.8"' : 'opacity="0.7"'}/>
+      <text x="${pad.l - 12}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12.5" fill="${dashed ? cv("--orange", "#c1602c") : mutedC}">${tickFmt(v, span)}</text>`;
   }).join("");
 
   const every = opt.xTickEvery || 1;
   const labels = xs.map((v, i) => {
     if (i % every !== 0 && i !== xs.length - 1) return "";
-    return `<line x1="${xAt(i).toFixed(1)}" y1="${pad.t}" x2="${xAt(i).toFixed(1)}" y2="${(h - pad.b).toFixed(1)}" stroke="${lineC}" stroke-width="1" opacity="0.55"/>
-      <text x="${xAt(i).toFixed(1)}" y="${(h - pad.b + 20).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
+    return `<text x="${xAt(i).toFixed(1)}" y="${(baseY + 22).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
   }).join("");
 
-  const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>
-    <line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>`;
+  const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${baseY}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1" opacity="0.9"/>
+    <line x1="${pad.l}" y1="${baseY}" x2="${w - pad.r}" y2="${baseY}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1" opacity="0.9"/>`;
 
   const xTitle = corner
     ? `<text x="${w - pad.r}" y="${h - 6}" text-anchor="end" font-size="14" font-style="italic" fill="${inkC}">${esc(corner.x)}</text>`
     : (opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "");
   const yTitle = corner
-    ? `<text x="${pad.l + 2}" y="${pad.t - 12}" text-anchor="start" font-size="13.5" fill="${inkC}">${esc(corner.y)}</text>`
+    ? `<text x="${pad.l + 2}" y="${pad.t - 14}" text-anchor="start" font-size="13.5" fill="${inkC}">${esc(corner.y)}</text>`
     : (opt.yLabel ? `<text x="16" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${inkC}" transform="rotate(-90 16 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "");
 
+  const defs = smooth
+    ? `<defs>${series.map((s, k) => `<linearGradient id="${gid}-${k}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${s.color}" stop-opacity="0.22"/>
+        <stop offset="1" stop-color="${s.color}" stop-opacity="0"/>
+      </linearGradient>`).join("")}</defs>`
+    : "";
+
+  const areas = (smooth && opt.area !== false) ? series.map((s, k) => {
+    const pts = s.ys.map((v, i) => (v == null || !Number.isFinite(v) ? null : { x: xAt(i), y: yAt(v) })).filter(Boolean);
+    if (pts.length < 2) return "";
+    const d = smoothPath(pts);
+    return `<path d="${d} L${pts[pts.length - 1].x.toFixed(1)},${baseY.toFixed(1)} L${pts[0].x.toFixed(1)},${baseY.toFixed(1)} Z" fill="url(#${gid}-${k})" stroke="none"/>`;
+  }).join("") : "";
+
   const paths = series.map((s) => {
+    if (smooth) {
+      const pts = s.ys.map((v, i) => (v == null || !Number.isFinite(v) ? null : { x: xAt(i), y: yAt(v) })).filter(Boolean);
+      if (pts.length < 2) return "";
+      return `<path d="${smoothPath(pts)}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
     let d = "", pen = false;
     s.ys.forEach((v, i) => {
       if (v == null || !Number.isFinite(v)) { pen = false; return; }
       d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`;
       pen = true;
     });
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${opt.points ? 2.4 : 2}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join("");
 
   const points = opt.points ? series.map((s) => s.ys.map((v, i) => (
     v == null || !Number.isFinite(v) ? "" :
-    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.2" fill="${s.color}" stroke="${cv("--paper", "#fff")}" stroke-width="1.6"/>`
+    smooth
+      ? `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.6" fill="${cv("--paper", "#fff")}" stroke="${s.color}" stroke-width="2"/>`
+      : `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.2" fill="${s.color}" stroke="${cv("--paper", "#fff")}" stroke-width="1.6"/>`
   )).join("")).join("") : "";
 
+  const markLabel = (opt.markY != null && opt.markLabel)
+    ? `<text x="${w - pad.r - 6}" y="${(yAt(opt.markY) - 7).toFixed(1)}" text-anchor="end" font-size="11.5" fill="${cv("--orange", "#c1602c")}">${esc(opt.markLabel)}</text>`
+    : "";
+
+  const svgLegend = (() => {
+    if (!opt.legendTop) return "";
+    const chipH = 22;
+    const base = pad.t - 22;
+    let lx = w - pad.r;
+    const parts = [];
+    for (let i = series.length - 1; i >= 0; i--) {
+      const s = series[i];
+      const nm = String(s.name);
+      const itemW = Math.max(20, nm.length * 7.6) + 34;
+      const x0 = lx - itemW;
+      parts.push(`<rect x="${x0.toFixed(1)}" y="${base}" width="${itemW.toFixed(1)}" height="${chipH}" rx="11" fill="${cv("--paper-2", "#f7f9fd")}"/>
+        <circle cx="${(x0 + 13).toFixed(1)}" cy="${(base + chipH / 2).toFixed(1)}" r="4" fill="${s.color}"/>
+        <text x="${(x0 + 23).toFixed(1)}" y="${(base + chipH / 2 + 4).toFixed(1)}" font-size="12.5" fill="${inkC}">${esc(nm)}</text>`);
+      lx = x0 - 8;
+    }
+    return parts.reverse().join("");
+  })();
+
   const hv = opt.interactive ? `<g class="hv" opacity="0">
-      <line class="hv-line" x1="0" y1="${pad.t}" x2="0" y2="${h - pad.b}" stroke="${cv("--blue", "#2563a8")}" stroke-dasharray="3 3" stroke-width="1.2"/>
-      ${series.map((s, k) => `<circle class="hv-dot" data-k="${k}" r="4.6" fill="${s.color}" stroke="${cv("--paper", "#fff")}" stroke-width="1.8"/>`).join("")}
+      <line class="hv-line" x1="0" y1="${pad.t}" x2="0" y2="${baseY}" stroke="${cv("--blue", "#2563a8")}" stroke-dasharray="3 3" stroke-width="1.2"/>
+      ${series.map((s, k) => `<circle class="hv-dot" data-k="${k}" r="4.8" fill="${cv("--paper", "#fff")}" stroke="${s.color}" stroke-width="2.2"/>`).join("")}
     </g>` : "";
 
   const meta = opt.interactive
@@ -1558,28 +1631,12 @@ function lineChart(series, o) {
     : "";
 
   const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
-  let svgLegend = "";
-  if (opt.legendTop) {
-    const ly = pad.t - 12;
-    let lx = w - pad.r;
-    const parts = [];
-    for (let i = series.length - 1; i >= 0; i--) {
-      const s = series[i];
-      const nm = String(s.name);
-      const itemW = Math.max(20, nm.length * 7.8) + 18;
-      const x0 = lx - itemW;
-      parts.push(`<circle cx="${(x0 + 4).toFixed(1)}" cy="${(ly - 4.5).toFixed(1)}" r="4" fill="${s.color}"/><text x="${(x0 + 14).toFixed(1)}" y="${ly.toFixed(1)}" font-size="13" fill="${inkC}">${esc(nm)}</text>`);
-      lx = x0 - 18;
-    }
-    svgLegend = parts.reverse().join("");
-  }
   return `<div class="chart-wrap${opt.interactive ? " chart-interactive" : ""}" ${meta ? `data-meta="${meta}"` : ""}>
-    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${axis}${xTitle}${yTitle}${svgLegend}${paths}${points}${hv}</svg>
+    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${defs}${frame}${grid}${labels}${axis}${yTitle}${xTitle}${markLabel}${svgLegend}${areas}${paths}${points}${hv}</svg>
     ${opt.interactive ? `<div class="chart-tip" hidden></div>` : ""}
     ${opt.legendTop ? "" : legend}
   </div>`;
 }
-
 /* 折线图悬浮读数 */
 function chartHover(box, clientX) {
   const svg = box.querySelector("svg.chart");
@@ -2463,7 +2520,7 @@ function segAnalog() {
     .map(([a, b]) => ({ a, b, r: pearson(A.series[a], A.series[b]), legal: a === "ue" && b === "nb" }));
 
   return `
-  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", h: 300, yMin: -0.2, yMax: 1, markY: 0.2, points: true, interactive: true, head: "滞后", unit: "秒", cornerLabels: { y: "自相关 ρ", x: "t" }, legendTop: true })}`)}
+  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", h: 320, yMin: -0.2, yMax: 1, markY: 0.2, markLabel: "去相关阈值", smooth: true, frame: true, area: false, points: true, interactive: true, head: "滞后", unit: "秒", cornerLabels: { y: "自相关 ρ", x: "t" }, legendTop: true })}`)}
 
   ${card("互易性", `<div class="charts" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     ${pairs.map((p) => `<div class="plot"><div class="pair-head"><span class="pair-name">${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}</span><b class="pair-r${p.legal ? "" : " eve"}">${fx(p.r, 3)}</b></div>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#2563a8") : cv("--orange", "#c1602c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
