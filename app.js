@@ -1446,8 +1446,21 @@ function sceneSvg() {
     ? `<g class="jam-group"><circle cx="470" cy="214" r="6" class="jam"/><path d="M470 208l-6-10M470 208l6-10" stroke="${orange}" stroke-width="1.5" fill="none"/>
        <text x="470" y="240" text-anchor="middle" class="label" font-size="12">干扰源</text></g>`
     : "";
+  const flow = state.playing
+    ? `<circle class="flow-dot" r="3"><animateMotion dur="4.6s" repeatCount="indefinite"><mpath href="#legalPath"/></animateMotion></circle>
+       <circle class="flow-dot" r="2.2" opacity="0.55"><animateMotion dur="4.6s" begin="1.6s" repeatCount="indefinite"><mpath href="#legalPath"/></animateMotion></circle>`
+    : "";
   return `<svg viewBox="0 0 1100 300" role="img" aria-label="城市环境中 Alice 与 Bob 通信，Eve 被动窃听，可选 RIS 反射与干扰源">
-    <rect x="0" y="0" width="1100" height="300" fill="var(--base)"/>
+    <defs>
+      <linearGradient id="gLegal" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#1a4a86"/><stop offset="0.55" stop-color="#2563a8"/><stop offset="1" stop-color="#2aa8c4"/>
+      </linearGradient>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="2.4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <rect x="0" y="0" width="1100" height="300" fill="none"/>
     ${buildings.map((b) => `<rect class="building" x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="2"/>`).join("")}
     ${windows}
     <g>
@@ -1469,7 +1482,9 @@ function sceneSvg() {
     <path d="M850 174v6M844 177h12M850 192v4M846 196h8" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
     <text x="850" y="158" text-anchor="middle" class="label">Bob</text>
     <text x="850" y="212" text-anchor="middle" class="bits">101100</text>
-    <line class="path-legal" x1="262" y1="180" x2="838" y2="180" stroke="${blue}" stroke-width="2" fill="none"/>
+    <path id="legalPath" class="path-legal" d="M262 180 H838" fill="none"/>
+    ${flow}
+    <circle class="pulse" cx="560" cy="252" r="13"/>
     <circle cx="560" cy="252" r="12" class="node-eve" stroke-width="2"/>
     <path d="M560 246v6M554 249h12M560 264v4M556 268h8" stroke="var(--orange)" stroke-width="1.5" fill="none"/>
     <text x="560" y="234" text-anchor="middle" class="label">Eve</text>
@@ -1924,11 +1939,11 @@ function topbar() {
   const p = premise();
   const d = hasKeys() ? digital() : null;
   return `<header class="topbar">
-    <div class="brand">${ico("tower", 20)}物理层密钥安全评估</div>
+    <div class="brand"><span class="mark">${ico("tower", 18)}</span>物理层密钥安全评估</div>
     <div class="top-meta">
       <span>项目：城市无线测评</span><span class="sep">｜</span>
       ${state.synthetic ? `<span class="badge synth">合成演示数据</span>` : ""}
-      <span class="badge ${p.tone === "bad" ? "bad" : ""}">${esc(state.attack)} · 信道${esc(state.channel)}</span>
+      <span class="badge ${p.tone === "bad" ? "bad" : ""}"><i class="dot"></i>${esc(state.attack)} · 信道${esc(state.channel)}</span>
       ${d ? `<span class="badge">${num(d.nBits)} bit</span>` : ""}
     </div>
   </header>`;
