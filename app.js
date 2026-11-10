@@ -1293,6 +1293,8 @@ const ICONS = {
   pause: '<path d="M9 5v14M15 5v14"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  send: '<path d="M21 3 10.5 13.5M21 3l-6.5 18-4-8-8-4z"/>',
+  "arrow-right": '<path d="M4 12h15M13 6l6 6-6 6"/>',
 };
 
 function ico(name, size) {
@@ -1621,11 +1623,9 @@ function sceneSvg() {
 
 function pageHome() {
   const p = premise();
-  const d = hasKeys() ? digital() : null;
   return `
   <div class="page-head">
-    <h2>评估原理</h2>
-    <button class="btn primary" data-jump="input">新建评估</button>
+    <h2>评估场景</h2>
   </div>
 
   <div class="scene ${state.playing ? "" : "is-paused"}" id="scene">
@@ -1637,45 +1637,49 @@ function pageHome() {
   </div>
 
   ${card("物理层密钥生成流程", `<div class="generation-grid">
-    <div class="generation-step">${ico("tower")}<div class="step-label">互易信道探测</div><div class="step-output">探测信号</div></div>
-    <div class="generation-step">${ico("wave")}<div class="step-label">信道观测</div><div class="step-output mini-wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div></div>
-    <div class="generation-step">${ico("binary")}<div class="step-label">量化</div><div class="step-output"><code>10110010</code></div></div>
-    <div class="generation-step">${ico("merge")}<div class="step-label">信息调和</div><div class="step-output">一致密钥</div></div>
-    <div class="generation-step">${ico("key")}<div class="step-label">隐私放大</div><div class="step-output">最终密钥</div></div>
+    <div class="generation-step">${ico("send", 26)}<div class="step-label">发送导频信号</div><div class="step-output">导频序列</div></div>
+    <div class="generation-step">${ico("wave", 26)}<div class="step-label">信道观测</div><div class="step-output mini-wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div></div>
+    <div class="generation-step">${ico("binary", 26)}<div class="step-label">量化</div><div class="step-output"><code class="quant-bits">10110010</code></div></div>
+    <div class="generation-step">${ico("merge", 26)}<div class="step-label">信息调和</div><div class="step-output">一致密钥</div></div>
+    <div class="generation-step">${ico("key", 26)}<div class="step-label">隐私放大</div><div class="step-output">最终密钥</div></div>
   </div>`)}
 
-  ${card("物理层密钥安全性评估位置", `
-    <div class="assessment">
-      <div class="assessment-title">模拟域</div>
-      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">三方信道特征</span></div>
-      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">时序依赖 · 样本规模</span></div>
-      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("I(X^{L};Y^{L}\\mid Z^{L})/L")}</span></div>
-      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">源信息量参考</span></div>
+  ${card("评估流程", `<div class="flow-table">
+    <div class="flow-head">
+      <span class="flow-stage-head">阶段</span><span>输入</span><span>适用性检查</span><span>评估方法</span><span>输出</span>
     </div>
-    <div class="assessment">
-      <div class="assessment-title">数字域</div>
-      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">原始比特 · Eve 侧信息</span></div>
-      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">块依赖 · 概率支持</span></div>
-      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("H_{\\min}(K\\mid E)")}</span></div>
-      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">秘密熵下界</span></div>
+    <div class="flow-row">
+      <span class="flow-stage">模拟域</span>
+      <span>三方信道特征</span>
+      <span>时序依赖 · 样本规模</span>
+      <span class="math">${tex("I(X^{L};Y^{L}\\mid Z^{L})/L")}</span>
+      <span class="out">源信息量参考</span>
     </div>
-    <div class="assessment">
-      <div class="assessment-title">最终密钥</div>
-      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">调和记录 · 放大参数</span></div>
-      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">熵下界 · 泄露记录</span></div>
-      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span></div>
-      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">安全长度 · 净速率</span></div>
-    </div>`)}
-
-  ${card("当前评估状态", `<div class="stats">
-    ${stat("评估前提", esc(p.label), `${state.attack} · 信道${state.channel}`, p.tone === "ok" ? "ok" : p.tone === "bad" ? "bad" : "mute")}
-    ${stat("模拟域结论", analogConclusion() ? esc(analogConclusion().short) : "—", "信道信息量", analogConclusion() ? analogConclusion().tone : "mute")}
-    ${stat("数字域结论", digitalConclusion() ? esc(digitalConclusion().short) : "—", "密钥质量", digitalConclusion() ? digitalConclusion().tone : "mute")}
-    ${stat("密钥总长", d ? `${num(d.nBits)} <small>bit</small>` : "—", d ? `${num(d.lines)} 行 × ${d.width}` : "未导入", "mute")}
+    <div class="flow-row">
+      <span class="flow-stage">数字域</span>
+      <span>原始比特 · Eve 侧信息</span>
+      <span>块依赖 · 概率支持</span>
+      <span class="math">${tex("H_{\\min}(K\\mid E)")}</span>
+      <span class="out">秘密熵下界</span>
+    </div>
+    <div class="flow-row">
+      <span class="flow-stage">最终密钥</span>
+      <span>调和记录 · 放大参数</span>
+      <span>熵下界 · 泄露记录</span>
+      <span class="math">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span>
+      <span class="out">安全长度 · 净速率</span>
+    </div>
   </div>`)}
+
+  <div class="cta">
+    <div class="cta-text">
+      <h3>准备一次新的评估</h3>
+      <p>导入三方信道与密钥，模拟域与数字域会分别给出定量结论。</p>
+    </div>
+    <button class="btn cta-btn" data-jump="input">新建评估 ${ico("arrow-right", 18)}</button>
+  </div>
   `;
 }
-
 /* ============================================================
    11. 评估设置
    ============================================================ */
@@ -2087,9 +2091,31 @@ function pageBody() {
   return pageHome();
 }
 
+let quantTimer = null;
+
+/* 量化步骤的比特每 0.6 秒抖一次，模拟「正在量化」 */
+function startQuantTicker(root) {
+  if (quantTimer) { clearInterval(quantTimer); quantTimer = null; }
+  const el = root.querySelector(".quant-bits");
+  if (!el) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let bits = (el.textContent || "10110010").trim();
+  quantTimer = setInterval(() => {
+    if (!el.isConnected) { clearInterval(quantTimer); quantTimer = null; return; }
+    if (!state.playing) return;
+    const a = bits.split("");
+    if (Math.random() < 0.35) a.push(a.shift());
+    const i = Math.floor(Math.random() * a.length);
+    a[i] = a[i] === "1" ? "0" : "1";
+    bits = a.join("");
+    el.textContent = bits;
+  }, 620);
+}
+
 function render() {
   document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main>${pageBody()}</main>${footer()}</div>`;
   typeset();
+  startQuantTicker(document.getElementById("app"));
   const sc = document.querySelector(".scene svg");
   if (sc && typeof sc.pauseAnimations === "function" && !state.playing) sc.pauseAnimations();
   if (state.toast) {
