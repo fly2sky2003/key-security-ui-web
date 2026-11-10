@@ -1626,6 +1626,7 @@ function pageHome() {
   return `
   <div class="page-head">
     <h2>评估场景</h2>
+    <button class="btn primary" data-jump="input">新建评估</button>
   </div>
 
   <div class="scene ${state.playing ? "" : "is-paused"}" id="scene">
@@ -1646,7 +1647,7 @@ function pageHome() {
 
   ${card("评估流程", `<div class="flow-table">
     <div class="flow-head">
-      <span class="flow-stage-head">阶段</span><span>输入</span><span>适用性检查</span><span>评估方法</span><span>输出</span>
+      <span>阶段</span><span>输入</span><span>适用性检查</span><span class="col-math">评估方法</span><span class="col-out">输出</span>
     </div>
     <div class="flow-row">
       <span class="flow-stage">模拟域</span>
@@ -1674,7 +1675,6 @@ function pageHome() {
   <div class="cta">
     <div class="cta-text">
       <h3>准备一次新的评估</h3>
-      <p>导入三方信道与密钥，模拟域与数字域会分别给出定量结论。</p>
     </div>
     <button class="btn cta-btn" data-jump="input">新建评估 ${ico("arrow-right", 18)}</button>
   </div>

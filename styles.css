@@ -707,6 +707,9 @@ main > *:nth-child(8) { animation-delay: 280ms; }
 }
 .flow-head { padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
 .flow-head span { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; }
+.flow-head .col-math { text-align: center; }
+.flow-head .col-out { text-align: right; }
+.flow-head > span:first-child { padding-left: 11px; }
 .flow-row { padding: 13px 12px; border-bottom: 1px solid var(--line); transition: background var(--t-fast); }
 .flow-row:last-child { border-bottom: 0; }
 .flow-row:hover { background: var(--paper-2); }
