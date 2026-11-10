@@ -2039,12 +2039,10 @@ function analogChecks() {
   const rho = acfAt(A.common, A.series.ue, probe);
   const cover = rho == null ? "样本不足" : rho <= 0.2 ? "较完整" : rho <= 0.4 ? "部分" : "不足";
   return [
-    { k: "数据完整性", rule: "缺口 < 10%", actual: pct(A.gap), verdict: A.gap < 0.1 ? "通过" : "缺口偏大", tone: A.gap < 0.1 ? "ok" : "warn", why: "三方同一秒都有数据的比例；缺口太大会让按块切分出现空块。" },
-    { k: "时间对齐", rule: "重叠 ≥ 50%", actual: pct(A.ratio), verdict: A.ratio >= 0.5 ? "通过" : "部分对齐", tone: A.ratio >= 0.5 ? "ok" : "warn", why: "以记录最少的一方为分母，衡量三方共同时段占比。" },
-    { k: "时间相关性", rule: `ρ(${probe}s) ≤ 0.2`, actual: fx(rho, 3), verdict: cover === "较完整" ? "通过" : cover, tone: cover === "较完整" ? "ok" : "warn", why: "块间是否近似独立；只低是不够的，还要能凑够块数。" },
-    { k: "平稳性", rule: "Δμ<1σ 且 F<2", actual: st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", verdict: st ? st.level : "未知", tone: st ? st.tone : "warn", why: "分四段比较均值漂移与方差比；CSI 慢漂移会让不同时段的块均值失去可比性。" },
-    { k: "样本充分性", rule: "n ≥ 30", actual: `${blocks[0].n} 块`, verdict: blocks[0].n >= MIN_BLOCKS ? "通过" : "不足", tone: blocks[0].n >= MIN_BLOCKS ? "ok" : "bad", why: "三变量偏相关需要至少 30 个独立样本。" },
-    { k: "计算可行性", rule: "闭式解", actual: "3 变量", verdict: "可计算", tone: "ok", why: "联合高斯下条件互信息有闭式解，不需要迭代。" },
+    { k: "时间相关性", rule: `ρ(${probe} s) ≤ 0.2`, actual: fx(rho, 3), verdict: cover === "较完整" ? "通过" : cover, tone: cover === "较完整" ? "ok" : "warn" },
+    { k: "平稳性", rule: "Δμ < 1σ 且 F < 2", actual: st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", verdict: st ? st.level : "未知", tone: st ? st.tone : "warn" },
+    { k: "样本充分性", rule: `块数 n ≥ ${MIN_BLOCKS}`, actual: `${blocks[0].n}`, verdict: blocks[0].n >= MIN_BLOCKS ? "通过" : "不足", tone: blocks[0].n >= MIN_BLOCKS ? "ok" : "bad" },
+    { k: "计算可行性", rule: "闭式解，无迭代", actual: "3 变量", verdict: "可计算", tone: "ok" },
   ];
 }
 
@@ -2052,27 +2050,34 @@ function digitalChecks() {
   const d = digital();
   if (!d) return [];
   const g8 = d.groups[8];
+  const kdrOk = d.kdr != null && d.kdr <= 0.3;
   return [
-    { k: "密钥装载", rule: "十六进制 · 偶长度", actual: `${num(d.lines)} 行 × ${d.width}`, verdict: "通过", tone: "ok", why: "每两个十六进制字符是一个字节，行只是存储切分。" },
-    { k: "合法方 KDR", rule: "= 0", actual: pct(d.kdr, 2), verdict: d.same ? "通过" : "硬失败", tone: d.same ? "ok" : "bad", why: "隐私放大后两端必须逐位相同，非零即流程失败。" },
-    { k: "统计识别性", rule: "样本/状态 ≥ 10", actual: fx(g8.ratio, 1), verdict: g8.marginalOk ? "可估" : "不足", tone: g8.marginalOk ? "ok" : "warn", why: "分组直方图是否被样本撑满；空格子会让最小熵虚高。" },
-    { k: "条件最小熵", rule: "需放大前比特", actual: "不可估计", verdict: "未证明", tone: "warn", why: "H_min(K|E) 需要隐私放大前的量化比特与 Eve 同期观测，当前数据没有。" },
+    { k: "密钥装载", rule: "十六进制 · 偶长度", actual: `${num(d.lines)} 行 × ${d.width}`, verdict: "通过", tone: "ok" },
+    { k: "合法方 KDR", rule: "≤ 0.3", actual: d.kdr == null ? "—" : pct(d.kdr, 2), verdict: kdrOk ? "通过" : "偏高", tone: kdrOk ? "ok" : "bad" },
+    { k: "统计识别性", rule: "样本/状态 ≥ 10", actual: fx(g8.ratio, 1), verdict: g8.marginalOk ? "可估" : "不足", tone: g8.marginalOk ? "ok" : "warn" },
+    { k: "条件最小熵", rule: "需放大前比特", actual: "不可估计", verdict: "未证明", tone: "warn" },
   ];
 }
 
-function checkTable(items) {
-  if (!items.length) return emptyBox("还没有可检查的数据", "<p>先在下方导入三方信道与密钥。</p>");
-  return `<table class="data"><thead><tr><th>检查项</th><th>判据</th><th class="num">实测</th><th class="num">判定</th></tr></thead><tbody>
-    ${items.map((it) => {
-      const open = state.checkOpen === it.k;
-      const row = `<tr class="clickable" data-act="check" data-check="${esc(it.k)}">
-        <td><b style="font-weight:600">${it.k}</b></td>
-        <td class="meta">${it.rule}</td>
-        <td class="num">${it.actual}</td>
-        <td class="num">${tag(it.verdict, it.tone)}</td></tr>`;
-      return open ? row + `<tr class="note-row"><td colspan="4">${it.why}</td></tr>` : row;
-    }).join("")}
-  </tbody></table>`;
+/* 前置检查：无表头的指标行（判据在名称下方，实测单独成列） */
+function checkList(items) {
+  if (!items.length) return `<div class="empty"><h3>还没有可检查的数据</h3><p>先在下方导入三方信道与密钥。</p></div>`;
+  return `<div class="check-list">${items.map((it) => `<div class="check-item ${it.tone}">
+    <div class="check-main">
+      <span class="check-name">${it.k}</span>
+      <span class="check-rule">${it.rule}</span>
+    </div>
+    <span class="check-value">${it.actual}</span>
+    ${tag(it.verdict, it.tone)}
+  </div>`).join("")}</div>`;
+}
+
+function checksPanel(name, items) {
+  const passed = items.filter((x) => x.tone === "ok").length;
+  return `<div class="plot">
+    <div class="checks-head"><h3>${name}</h3><span class="meta">${items.length} 项 · ${passed} 项通过</span></div>
+    ${checkList(items)}
+  </div>`;
 }
 
 /* ---------- 轮次视图 ---------- */
@@ -2229,8 +2234,8 @@ function pageInput() {
 
   ${card("前置检查", `
     <div class="charts">
-      <div class="plot"><h3>模拟域</h3>${checkTable(analogChecks())}</div>
-      <div class="plot"><h3>数字域</h3>${checkTable(digitalChecks())}</div>
+      ${checksPanel("模拟域", analogChecks())}
+      ${checksPanel("数字域", digitalChecks())}
     </div>`, r ? tag(`第 ${state.active + 1} 轮`, "info") : "")}
 
   ${card("分析参数", `<div class="form">

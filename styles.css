@@ -858,3 +858,29 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
 }
 /* 缩略场景的合法链路 */
 .scene .path-legal-mini { stroke: url(#gLegalMini); stroke-width: 2.6; }
+/* ---------- 前置检查：无表头指标行 ---------- */
+.checks-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.checks-head h3 { margin: 0; }
+.check-list { display: grid; }
+.check-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.check-item:last-child { border-bottom: 0; }
+.check-main { min-width: 0; display: grid; gap: 2px; }
+.check-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.check-rule { font-size: 12px; color: var(--faint); letter-spacing: 0.01em; }
+.check-value {
+  font: 650 16px var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.check-item.warn .check-value { color: var(--orange); }
+.check-item.bad .check-value { color: var(--red); }
+.check-item .tag { min-width: 52px; justify-content: center; }
