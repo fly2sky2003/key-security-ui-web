@@ -269,7 +269,6 @@ p { margin: 8px 0; }
 .scene .road { fill: var(--line-strong); opacity: 0.35; }
 .scene .dash { stroke: var(--paper); stroke-width: 2; stroke-dasharray: 14 12; }
 .scene .car { fill: var(--blue); opacity: 0.65; }
-.scene .jam { fill: var(--red); opacity: 0.8; }
 .scene .ris-box { fill: var(--paper); stroke: var(--green); stroke-width: 1.6; }
 .scene .ris-cell { fill: var(--green); opacity: 0.75; }
 .scene .flow-dot { fill: var(--blue-bright); filter: url(#glow); }
@@ -680,17 +679,8 @@ main > *:nth-child(8) { animation-delay: 280ms; }
 .scene .tape-bg { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
 .scene .tape-text { font: 11px var(--font-mono); fill: var(--muted); letter-spacing: 0.4px; }
 .scene .arrow { filter: url(#glow); }
-.scene .wave {
-  fill: none; stroke: var(--blue-bright); stroke-width: 1.4; opacity: 0;
-  animation: wavePulse 3.4s ease-out infinite;
-}
 .scene .ris-frame { fill: none; stroke: var(--green); stroke-width: 1.6; }
 .scene .ris-cell { fill: var(--green); opacity: 0.45; animation: cellPulse 2.6s ease-in-out infinite; }
-.scene .ris-glow {
-  fill: none; stroke: var(--green); stroke-width: 0.9; opacity: 0.25;
-  transform-box: fill-box; transform-origin: center;
-  animation: risGlow 3.2s ease-in-out infinite;
-}
 
 @keyframes blink { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
 @keyframes txPulse {
@@ -698,21 +688,10 @@ main > *:nth-child(8) { animation-delay: 280ms; }
   70% { transform: scale(1.5); opacity: 0; }
   100% { transform: scale(1.5); opacity: 0; }
 }
-@keyframes wavePulse {
-  0% { opacity: 0; transform: translateX(-6px); }
-  25% { opacity: 0.85; }
-  100% { opacity: 0; transform: translateX(10px); }
-}
 @keyframes cellPulse {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.95; }
 }
-@keyframes risGlow {
-  0%, 100% { opacity: 0.15; transform: scale(0.96); }
-  50% { opacity: 0.4; transform: scale(1.06); }
-}
 .scene.is-paused .tx,
-.scene.is-paused .wave,
 .scene.is-paused .ris-cell,
-.scene.is-paused .ris-glow,
 .scene.is-paused .antenna-dot { animation-play-state: paused; }

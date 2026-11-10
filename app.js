@@ -43,7 +43,6 @@ const state = {
   tab: "home",
   seg: "analog",
   risOn: true,
-  jamOn: false,
   playing: true,
   slots: {},
   L: 4,
@@ -1524,12 +1523,6 @@ function sceneSvg() {
        </polygon>`
     : "";
 
-  /* 电磁波纹：沿链路浮动的弧线 */
-  const wave = (x, y, delay) => `<path class="wave" d="M${x} ${y} q 4.5 -6 9 0 t 9 0" style="animation-delay:${delay}s"/>`;
-  const waves = anim
-    ? wave(360, 156, 0) + wave(500, 156, 0.9) + wave(700, 156, 1.8) + wave(880, 156, 2.6)
-    : "";
-
   /* RIS 面板：9x9 单元，错峰闪烁 */
   const risCells = (() => {
     let s = "";
@@ -1548,18 +1541,9 @@ function sceneSvg() {
         <path id="risB" class="path-ris" d="M570 96 L830 152" fill="none"/>
         <rect class="ris-frame" x="528" y="64" width="44" height="44" rx="5"/>
         ${risCells}
-        <circle class="ris-glow" cx="550" cy="86" r="26"/>
         <text x="550" y="54" text-anchor="middle" class="label">RIS</text>
         ${arrow("risA", 3.6, "var(--green)", 0.4)}
         ${arrow("risB", 3.6, "var(--green)", 1.6)}
-      </g>`
-    : "";
-
-  const jam = state.jamOn
-    ? `<g class="jam-group">
-        <circle cx="470" cy="228" r="6" class="jam"/>
-        <path d="M470 221l-7-11M470 221l7-11" stroke="var(--orange)" stroke-width="1.6" fill="none"/>
-        <text x="470" y="252" text-anchor="middle" class="label" font-size="12">干扰源</text>
       </g>`
     : "";
 
@@ -1607,18 +1591,17 @@ function sceneSvg() {
       <rect x="0" y="252" width="1100" height="82" class="sidewalk"/>
     </g>
 
-    <line id="legalPath" class="path-legal-guide" x1="266" y1="160" x2="830" y2="160" stroke="none"/>
+    <path id="legalPath" class="path-legal-guide" d="M266 160 H830" fill="none" stroke="none"/>
 
     <path id="eveA" class="path-eve" d="M266 166 L536 260" fill="none"/>
     <path id="eveB" class="path-eve" d="M830 166 L560 260" fill="none"/>
 
     <path class="path-legal-halo" d="M266 160 H830" fill="none"/>\n    <path class="path-legal" d="M266 160 H830" fill="none"/>
-    ${waves}
     ${arrow("legalPath", 4.2, "var(--blue-bright)", 0)}
+    ${arrow("legalPath", 4.2, "var(--blue-bright)", 2.1)}
     ${arrow("eveA", 5.4, "var(--orange)", 0.6)}
     ${arrow("eveB", 5.4, "var(--orange)", 2.4)}
     ${ris}
-    ${jam}
 
     ${carG}
 
@@ -1648,7 +1631,6 @@ function pageHome() {
   <div class="scene ${state.playing ? "" : "is-paused"}" id="scene">
     <div class="scene-bar">
       <label><input type="checkbox" data-act="ris" ${state.risOn ? "checked" : ""}/> RIS</label>
-      <label><input type="checkbox" data-act="jam" ${state.jamOn ? "checked" : ""}/> 干扰源</label>
       <button class="btn" data-act="play">${state.playing ? "暂停" : "继续"}</button>
     </div>
     ${sceneSvg()}
@@ -2150,7 +2132,6 @@ document.addEventListener("change", (e) => {
     return;
   }
   if (el.dataset.act === "ris") { state.risOn = el.checked; render(); return; }
-  if (el.dataset.act === "jam") { state.jamOn = el.checked; render(); return; }
 });
 
 document.addEventListener("click", async (e) => {
