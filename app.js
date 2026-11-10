@@ -1493,7 +1493,7 @@ function lineChart(series, o) {
   const opt = o || {};
   const w = opt.w || 720, h = opt.h || 250;
   const corner = opt.cornerLabels;
-  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: corner ? 30 : 16, b: (opt.xLabel || corner) ? 46 : 28 };
+  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: corner ? 30 : 16, b: corner ? 54 : (opt.xLabel ? 48 : 28) };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const yMin = opt.yMin == null ? -0.2 : opt.yMin;
   const yMax = opt.yMax == null ? 1 : opt.yMax;
@@ -1516,14 +1516,14 @@ function lineChart(series, o) {
   const labels = xs.map((v, i) => {
     if (i % every !== 0 && i !== xs.length - 1) return "";
     return `<line x1="${xAt(i).toFixed(1)}" y1="${pad.t}" x2="${xAt(i).toFixed(1)}" y2="${(h - pad.b).toFixed(1)}" stroke="${lineC}" stroke-width="1" opacity="0.55"/>
-      <text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 10)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
+      <text x="${xAt(i).toFixed(1)}" y="${(h - pad.b + 20).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
   }).join("");
 
   const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>
     <line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>`;
 
   const xTitle = corner
-    ? `<text x="${w - pad.r}" y="${(h - pad.b - 8).toFixed(1)}" text-anchor="end" font-size="14" font-style="italic" fill="${inkC}">${esc(corner.x)}</text>`
+    ? `<text x="${w - pad.r}" y="${h - 6}" text-anchor="end" font-size="14" font-style="italic" fill="${inkC}">${esc(corner.x)}</text>`
     : (opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "");
   const yTitle = corner
     ? `<text x="${pad.l + 2}" y="${pad.t - 12}" text-anchor="start" font-size="13.5" fill="${inkC}">${esc(corner.y)}</text>`
@@ -1557,10 +1557,24 @@ function lineChart(series, o) {
     }))
     : "";
 
-  const legend = `<div class="legend${opt.legendTop ? " legend-top" : ""}">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
+  const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
+  let svgLegend = "";
+  if (opt.legendTop) {
+    const ly = pad.t - 12;
+    let lx = w - pad.r;
+    const parts = [];
+    for (let i = series.length - 1; i >= 0; i--) {
+      const s = series[i];
+      const nm = String(s.name);
+      const itemW = Math.max(20, nm.length * 7.8) + 18;
+      const x0 = lx - itemW;
+      parts.push(`<circle cx="${(x0 + 4).toFixed(1)}" cy="${(ly - 4.5).toFixed(1)}" r="4" fill="${s.color}"/><text x="${(x0 + 14).toFixed(1)}" y="${ly.toFixed(1)}" font-size="13" fill="${inkC}">${esc(nm)}</text>`);
+      lx = x0 - 18;
+    }
+    svgLegend = parts.reverse().join("");
+  }
   return `<div class="chart-wrap${opt.interactive ? " chart-interactive" : ""}" ${meta ? `data-meta="${meta}"` : ""}>
-    ${opt.legendTop ? legend : ""}
-    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${axis}${xTitle}${yTitle}${paths}${points}${hv}</svg>
+    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${axis}${xTitle}${yTitle}${svgLegend}${paths}${points}${hv}</svg>
     ${opt.interactive ? `<div class="chart-tip" hidden></div>` : ""}
     ${opt.legendTop ? "" : legend}
   </div>`;
