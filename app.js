@@ -1491,8 +1491,8 @@ function niceTicks(min, max, count) {
 
 function lineChart(series, o) {
   const opt = o || {};
-  const w = opt.w || 720, h = opt.h || 240;
-  const pad = { l: opt.yLabel ? 66 : 44, r: 16, t: 14, b: opt.xLabel ? 46 : 26 };
+  const w = opt.w || 720, h = opt.h || 250;
+  const pad = { l: opt.yLabel ? 70 : 46, r: 18, t: 16, b: opt.xLabel ? 48 : 28 };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const yMin = opt.yMin == null ? -0.2 : opt.yMin;
   const yMax = opt.yMax == null ? 1 : opt.yMax;
@@ -1500,19 +1500,30 @@ function lineChart(series, o) {
   const xs = series[0].xs;
   const xAt = (i) => pad.l + (xs.length <= 1 ? 0 : (i / (xs.length - 1)) * iw);
   const yAt = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
+  const lineC = cv("--line", "#e0e7f1");
+  const inkC = cv("--ink", "#14213a");
+  const mutedC = cv("--muted", "#56657e");
+
   const ticks = (opt.gridVals && opt.gridVals.length) ? opt.gridVals : niceTicks(yMin, yMax, opt.yTicks || 5);
   const grid = ticks.map((v) => {
     const dashed = opt.markY != null && Math.abs(v - opt.markY) < 1e-9;
-    return `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${dashed ? cv("--orange", "#ad643c") : cv("--line", "#dfe5ed")}" ${dashed ? 'stroke-dasharray="4 4"' : ""}/>
-      <text x="${pad.l - 8}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="11.5" fill="${dashed ? cv("--orange", "#ad643c") : cv("--muted", "#617184")}">${tickFmt(v, span)}</text>`;
+    return `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${dashed ? cv("--orange", "#c1602c") : lineC}" stroke-width="1" ${dashed ? 'stroke-dasharray="5 4"' : ""}/>
+      <text x="${pad.l - 10}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12.5" fill="${dashed ? cv("--orange", "#c1602c") : mutedC}">${tickFmt(v, span)}</text>`;
   }).join("");
-  const every = opt.xTickEvery || 0;
+
+  const every = opt.xTickEvery || 1;
   const labels = xs.map((v, i) => {
-    if (every && i % every !== 0 && i !== xs.length - 1) return "";
-    return `<text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 8)}" text-anchor="middle" font-size="11.5" fill="${cv("--muted", "#617184")}">${esc(v)}</text>`;
+    if (i % every !== 0 && i !== xs.length - 1) return "";
+    return `<line x1="${xAt(i).toFixed(1)}" y1="${pad.t}" x2="${xAt(i).toFixed(1)}" y2="${(h - pad.b).toFixed(1)}" stroke="${lineC}" stroke-width="1" opacity="0.55"/>
+      <text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 10)}" text-anchor="middle" font-size="12.5" fill="${mutedC}">${esc(v)}</text>`;
   }).join("");
-  const xTitle = opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}">${esc(opt.xLabel)}</text>` : "";
-  const yTitle = opt.yLabel ? `<text x="14" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}" transform="rotate(-90 14 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "";
+
+  const axis = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>
+    <line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="${cv("--line-strong", "#c8d3e4")}" stroke-width="1"/>`;
+
+  const xTitle = opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12.5" fill="${inkC}">${esc(opt.xLabel)}</text>` : "";
+  const yTitle = opt.yLabel ? `<text x="16" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="${inkC}" transform="rotate(-90 16 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "";
+
   const paths = series.map((s) => {
     let d = "", pen = false;
     s.ys.forEach((v, i) => {
@@ -1520,12 +1531,94 @@ function lineChart(series, o) {
       d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`;
       pen = true;
     });
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>`;
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${opt.points ? 2.4 : 2}" stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join("");
+
+  const points = opt.points ? series.map((s) => s.ys.map((v, i) => (
+    v == null || !Number.isFinite(v) ? "" :
+    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.2" fill="${s.color}" stroke="${cv("--paper", "#fff")}" stroke-width="1.6"/>`
+  )).join("")).join("") : "";
+
+  const hv = opt.interactive ? `<g class="hv" opacity="0">
+      <line class="hv-line" x1="0" y1="${pad.t}" x2="0" y2="${h - pad.b}" stroke="${cv("--blue", "#2563a8")}" stroke-dasharray="3 3" stroke-width="1.2"/>
+      ${series.map((s, k) => `<circle class="hv-dot" data-k="${k}" r="4.6" fill="${s.color}" stroke="${cv("--paper", "#fff")}" stroke-width="1.8"/>`).join("")}
+    </g>` : "";
+
+  const meta = opt.interactive
+    ? esc(JSON.stringify({
+      w, h, pad, xs, yMin, yMax,
+      head: opt.head || "x", unit: opt.unit || "",
+      series: series.map((s) => ({ name: s.name, color: s.color, ys: s.ys })),
+    }))
+    : "";
+
   const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
-  return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${xTitle}${yTitle}${paths}</svg>${legend}</div>`;
+  return `<div class="chart-wrap${opt.interactive ? " chart-interactive" : ""}" ${meta ? `data-meta="${meta}"` : ""}>
+    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${axis}${xTitle}${yTitle}${paths}${points}${hv}</svg>
+    ${opt.interactive ? `<div class="chart-tip" hidden></div>` : ""}
+    ${legend}
+  </div>`;
 }
 
+/* 折线图悬浮读数 */
+function chartHover(box, clientX) {
+  const svg = box.querySelector("svg.chart");
+  const tip = box.querySelector(".chart-tip");
+  const hv = box.querySelector(".hv");
+  if (!svg || !tip || !hv) return;
+  let meta;
+  try { meta = JSON.parse(box.dataset.meta); } catch (e) { return; }
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width) return;
+  const { pad, xs, series, yMin, yMax } = meta;
+  const iw = meta.w - pad.l - pad.r;
+  const ih = meta.h - pad.t - pad.b;
+  const xAt = (i) => pad.l + (xs.length <= 1 ? 0 : (i / (xs.length - 1)) * iw);
+  const vx = ((clientX - rect.left) / rect.width) * meta.w;
+  let best = 0, bestD = Infinity;
+  xs.forEach((_, i) => { const d = Math.abs(xAt(i) - vx); if (d < bestD) { bestD = d; best = i; } });
+  const cx = xAt(best);
+  const line = hv.querySelector(".hv-line");
+  if (line) { line.setAttribute("x1", cx.toFixed(1)); line.setAttribute("x2", cx.toFixed(1)); }
+  series.forEach((s, k) => {
+    const dot = hv.querySelector(`.hv-dot[data-k="${k}"]`);
+    if (!dot) return;
+    const v = s.ys[best];
+    if (v == null || !Number.isFinite(v)) { dot.setAttribute("opacity", "0"); return; }
+    dot.setAttribute("opacity", "1");
+    dot.setAttribute("cx", cx.toFixed(1));
+    dot.setAttribute("cy", (pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih).toFixed(1));
+  });
+  hv.setAttribute("opacity", "1");
+  tip.innerHTML = `<div class="tip-head">${esc(meta.head)} ${esc(xs[best])} ${esc(meta.unit)}</div>` +
+    series.map((s) => {
+      const v = s.ys[best];
+      return `<div class="tip-row"><i style="background:${s.color}"></i><span>${esc(s.name)}</span><b>${v == null || !Number.isFinite(v) ? "—" : v.toFixed(3)}</b></div>`;
+    }).join("");
+  tip.hidden = false;
+  const offset = rect.left - box.getBoundingClientRect().left;
+  const half = tip.offsetWidth / 2;
+  const leftPx = offset + (cx / meta.w) * rect.width;
+  tip.style.left = `${Math.max(half + 2, Math.min(box.clientWidth - half - 2, leftPx))}px`;
+  tip.style.top = "2px";
+}
+
+function hideChartHover(box) {
+  const hv = box.querySelector(".hv");
+  if (hv) hv.setAttribute("opacity", "0");
+  const tip = box.querySelector(".chart-tip");
+  if (tip) tip.hidden = true;
+}
+
+document.addEventListener("mousemove", (e) => {
+  const t = e.target;
+  const box = t && t.closest ? t.closest(".chart-interactive") : null;
+  if (box) { chartHover(box, e.clientX); return; }
+  document.querySelectorAll(".chart-interactive").forEach(hideChartHover);
+});
+document.addEventListener("mouseleave", () => {
+  document.querySelectorAll(".chart-interactive").forEach(hideChartHover);
+}, true);
 function scatterChart(xs, ys, color, xName, yName) {
   const w = 300, h = 220;
   const pad = { l: 36, r: 10, t: 10, b: 32 };
@@ -2321,16 +2414,14 @@ function pageInput() {
    ============================================================ */
 
 function roundPicker() {
-  if (state.rounds.length <= 1) return "";
-  return `<label class="round-pick">轮次
-    <select data-round-select>${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>第 ${i + 1} 轮</option>`).join("")}</select>
-  </label>`;
+  if (!state.rounds.length) return "";
+  return `<label class="round-pick"><select data-round-select aria-label="轮次">${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>第 ${i + 1} 轮</option>`).join("")}</select></label>`;
 }
 
 function conclusionBlock(c, sub) {
   if (!c) return "";
   return `<div class="concl ${c.tone}">
-    <div class="concl-head"><span class="concl-tag">${esc(c.label)}</span><span class="meta">${esc(sub || "")}</span></div>
+    <div class="concl-head"><span class="concl-tag">${esc(c.label)}</span>${sub ? `<span class="meta">${esc(sub)}</span>` : ""}</div>
     <p class="concl-text">${esc(c.text)}</p>
     ${c.note ? `<p class="concl-note">${esc(c.note)}</p>` : ""}
   </div>`;
@@ -2352,28 +2443,28 @@ function segAnalog() {
     .map(([a, b]) => ({ a, b, r: pearson(A.series[a], A.series[b]), legal: a === "ue" && b === "nb" }));
 
   return `
-  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", yMin: -0.2, yMax: 1, markY: 0.2, xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}`)}
+  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", h: 280, yMin: -0.2, yMax: 1, markY: 0.2, points: true, interactive: true, head: "滞后", unit: "秒", xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}`)}
 
   ${card("互易性", `<div class="charts" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    ${pairs.map((p) => `<div class="plot"><h3>${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}　<span class="meta">${fx(p.r, 3)}</span></h3>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#245b9a") : cv("--orange", "#ad643c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
+    ${pairs.map((p) => `<div class="plot"><div class="pair-head"><span class="pair-name">${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}</span><b class="pair-r${p.legal ? "" : " eve"}">${fx(p.r, 3)}</b></div>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#2563a8") : cv("--orange", "#c1602c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
   </div>`)}
 
-  ${card("块长候选", `<table class="data">
+  ${card("块长候选", `<table class="data block-table">
     <thead><tr><th>块长</th><th class="num">ρ(L)</th><th class="num">块数</th><th>依赖覆盖</th><th>样本支撑</th><th class="num">判定</th></tr></thead>
     <tbody>${blocks.map((b) => `<tr class="${b.L === state.L ? "picked" : ""} clickable" data-act="set-L" data-l="${b.L}">
       <td><b style="font-weight:600">${b.L} s</b></td><td class="num">${fx(b.rho, 3)}</td><td class="num">${b.n}</td>
-      <td class="meta">${b.cover}</td><td class="meta">${b.support}</td>
+      <td>${b.cover}</td><td class="num">${b.support}</td>
       <td class="num">${b.ok ? tag("可选", "ok") : tag("不满足", "warn")}</td></tr>`).join("")}</tbody>
   </table>`, tag(`L = ${state.L} 秒`, "info"))}
 
   ${card("信息量估计", `<div class="stats">
-    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", u ? (u.ok ? "样本充分" : "样本不足") : "无法估计", u && u.ok ? "info" : "mute")}
-    ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", u && u.base.D != null ? `截断前 ${fx(u.base.raw, 3)}` : "缺 Eve 数据", u && u.base.D > 0 ? "info" : "mute")}
-    ${stat("块数", u ? num(u.n) : "—", u ? `每块 ${u.perBlock} 个观测` : "—", "mute")}
-    ${stat("平稳性", st ? st.level : "—", st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", st ? st.tone : "mute")}
+    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", "", u && u.ok ? "info" : "mute")}
+    ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", "", u && u.base.D > 0 ? "info" : "mute")}
+    ${stat("块数", u ? `${num(u.n)} <small>每块 ${u.perBlock} 个观测</small>` : "—", "", "mute")}
+    ${stat("平稳性", st ? `${st.level} <small>${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}</small>` : "—", "", st ? st.tone : "mute")}
   </div>`)}
 
-  ${conclusionBlock(analogConclusion(), "模拟域 · 定量依据")}
+  ${conclusionBlock(analogConclusion(), "")}
   `;
 }
 
@@ -2383,10 +2474,10 @@ function segDigital() {
   const g8 = d.groups[8];
   return `
   ${card("一致性与分组", `<div class="stats">
-    ${stat("合法方 KDR", pct(d.kdr, 2), d.same ? "完全一致" : "流程硬失败", d.same ? "ok" : "bad")}
-    ${stat("Eve 和合法方的 KDR", pct(d.eveRate, 2), "理想独立序列 ≈ 50%", Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
-    ${stat("密钥总量", `${num(d.nBits)} <small>bit</small>`, `${num(d.lines)} 行 × ${d.width}`, "mute")}
-    ${stat("单块最小熵", `${fx(g8.hmin, 3)} <small>bit</small>`, `8 bit 块 · ${num(g8.nb)} 组`, g8.hmin >= 7 ? "ok" : "warn")}
+    ${stat("合法方 KDR", pct(d.kdr, 2), "", d.same ? "ok" : "bad")}
+    ${stat("Eve 和合法方的 KDR", pct(d.eveRate, 2), "", Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
+    ${stat("密钥总量", `${num(d.nBits)} <small>bit · ${num(d.lines)} 行 × ${d.width}</small>`, "", "mute")}
+    ${stat("单块最小熵", `${fx(g8.hmin, 3)} <small>bit / 8 bit 块</small>`, "", g8.hmin >= 7 ? "ok" : "warn")}
   </div>
   <table class="data" style="margin-top:14px">
     <thead><tr><th>块长 b</th><th class="num">组数</th><th class="num">状态 2^b</th><th class="num">样本/状态</th><th class="num">覆盖</th><th class="num">H_min</th><th class="num">识别性</th></tr></thead>
@@ -2398,18 +2489,18 @@ function segDigital() {
   </table>`)}
 
   ${card("NIST SP 800-22", `<div class="stats" style="margin-bottom:12px">
-    ${stat("通过", `${t.passed} / ${t.judged.length}`, "仅统计可判定项", t.passed === t.judged.length ? "ok" : "warn")}
-    ${stat("样本长度", `${num(t.n)} <small>bit</small>`, `共 ${t.rows.length} 项检验`, "mute")}
-    ${stat("可判定", `${t.judged.length} 项`, "其余长度不足", "warn")}
+    ${stat("通过", `${t.passed} / ${t.judged.length}`, "", t.passed === t.judged.length ? "ok" : "warn")}
+    ${stat("样本长度", `${num(t.n)} <small>bit · ${t.rows.length} 项检验</small>`, "", "mute")}
+    ${stat("可判定", `${t.judged.length} 项`, "", "warn")}
   </div>
   <table class="data"><thead><tr><th>检验项</th><th>参数</th><th class="num">p 值</th><th class="num">判定</th></tr></thead>
     <tbody>${t.rows.map((r) => {
       const open = state.nistOpen === r.id;
-      const row = `<tr class="clickable" data-act="nist" data-id="${r.id}"><td>${r.name}</td><td class="meta">${r.param || ""}</td>
+      const row = `<tr class="clickable" data-act="nist" data-id="${r.id}"><td>${r.name}</td><td>${r.param || ""}</td>
         <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td><td class="num">${tag(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td></tr>`;
       return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
     }).join("")}</tbody></table>`)}
-  ${conclusionBlock(digitalConclusion(), "数字域 · 定量依据")}
+  ${conclusionBlock(digitalConclusion(), "")}
   `;
 }
 
@@ -2432,10 +2523,10 @@ function segFinal() {
   return `
   ${card("熵预算", `
     <div class="stats" style="margin-bottom:14px">
-      ${stat("建议提取长度 ℓ_safe", `${num(b.safe)} <small>bit</small>`, "假设输入下的上界", b.raw < 0 ? "bad" : "info")}
-      ${stat("实际提取", actual == null ? "—" : `${num(actual)} <small>bit</small>`, actual == null ? "未导入密钥" : feasible ? "在预算内" : "超出预算", actual == null ? "mute" : feasible ? "ok" : "bad")}
-      ${stat("净速率", netRate == null ? "—" : `${fx(netRate, 1)} <small>bit/s</small>`, `按 ${num(seconds)} 秒折算`, "mute")}
-      ${stat("调和成功率", `${num(succ)} %`, succ >= 100 ? "全部批次成功" : "按输入值折算", succ >= 100 ? "ok" : "warn")}
+      ${stat("建议提取长度 ℓ_safe", `${num(b.safe)} <small>bit</small>`, "", b.raw < 0 ? "bad" : "info")}
+      ${stat("实际提取", actual == null ? "—" : `${num(actual)} <small>bit</small>`, "", actual == null ? "mute" : feasible ? "ok" : "bad")}
+      ${stat("净速率", netRate == null ? "—" : `${fx(netRate, 1)} <small>bit/s</small>`, "", "mute")}
+      ${stat("调和成功率", `${num(succ)} %`, "", succ >= 100 ? "ok" : "warn")}
     </div>
     ${barRows([
       { label: "调和前熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: "info" },
@@ -2459,7 +2550,6 @@ function pageResults() {
       ${card(null, emptyBox("还没有数据", `<p>先在「评估设置」导入三方数据，或载入示例 / 合成演示。</p><p><button class="btn primary" data-jump="input">去评估设置</button></p>`))}`;
   }
   const ar = activeRound();
-  const src = ar ? `第 ${state.active + 1} 轮 / 共 ${state.rounds.length} 轮` : "无数据";
   const segs = [["analog", "模拟域"], ["digital", "数字域"], ["final", "最终密钥"]];
   const segBody = state.seg === "analog"
     ? (hasAnalog() ? segAnalog() : card(null, emptyBox("还缺信道数据", "<p>模拟域需要 Alice、Bob 两方（最好三方）的 CSI/RSSI。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
@@ -2467,11 +2557,10 @@ function pageResults() {
       ? (hasKeys() ? segDigital() : card(null, emptyBox("还缺密钥文件", "<p>数字域需要 Alice / Bob 的 TXT 密钥。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
       : segFinal();
   return `
-  <div class="page-head"><h2>分析结果</h2><div class="head-tools">${roundPicker()}<span class="meta">${src}</span></div></div>
+  <div class="page-head"><h2>分析结果</h2><div class="head-tools">${roundPicker()}</div></div>
   <div class="toolbar">
     <div class="segments" role="group" aria-label="分析阶段">${segs.map(([id, name]) => `<button data-act="seg" data-seg="${id}" aria-pressed="${state.seg === id}">${name}</button>`).join("")}</div>
-    <span class="meta">当前阶段：${(segs.find((s) => s[0] === state.seg) || segs[0])[1]}</span>
-  </div>
+    </div>
   ${segBody}
   `;
 }
@@ -2599,7 +2688,7 @@ function startQuantTicker(root) {
 }
 
 function render() {
-  document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main>${pageBody()}</main>${footer()}</div>`;
+  document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main class="tab-${state.tab}">${pageBody()}</main>${footer()}</div>`;
   typeset();
   if (state.tab === "input" && state.obsPlay && hasAnalog()) startObsTimer();
   startQuantTicker(document.getElementById("app"));

@@ -907,3 +907,32 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
 @media (max-width: 760px) {
   .obs-grid { grid-template-columns: 1fr; }
 }
+/* ---------- 分析结果页：互易性数值 ---------- */
+.pair-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.pair-name { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.pair-r { font: 650 27px/1 var(--font-num); letter-spacing: -0.02em; color: var(--blue); font-variant-numeric: tabular-nums; }
+.pair-r.eve { color: var(--orange); }
+
+/* ---------- 块长候选：等间距列 ---------- */
+table.block-table { table-layout: fixed; }
+table.block-table th:nth-child(1) { width: 13%; }
+table.block-table th:nth-child(2) { width: 16%; }
+table.block-table th:nth-child(3) { width: 13%; }
+table.block-table th:nth-child(4) { width: 21%; }
+table.block-table th:nth-child(5) { width: 21%; }
+table.block-table th:nth-child(6) { width: 16%; }
+table.block-table th, table.block-table td { padding-left: 14px; padding-right: 14px; }
+table.block-table th:first-child, table.block-table td:first-child { padding-left: 2px; }
+table.block-table th:last-child, table.block-table td:last-child { padding-right: 2px; }
+table.block-table td:nth-child(4) { text-align: left; }
+table.block-table td:nth-child(5) { text-align: left; }
+
+/* ---------- 图表悬浮 ---------- */
+.chart-interactive { cursor: crosshair; }
+.chart-interactive .chart-tip { position: absolute; z-index: 5; }
+/* ---------- 分析结果页：去掉灰色小字 ---------- */
+main.tab-results table.data th { color: var(--ink); }
+main.tab-results .legend { color: var(--ink); }
+main.tab-results .meta,
+main.tab-results .hint { color: var(--ink); }
+main.tab-results .stat .n { display: none; }
