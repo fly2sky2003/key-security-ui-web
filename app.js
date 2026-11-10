@@ -43,6 +43,8 @@ const state = {
   tab: "home",
   seg: "analog",
   risOn: true,
+  rounds: [],
+  active: 0,
   playing: true,
   slots: {},
   L: 4,
@@ -255,18 +257,36 @@ function loadSlot(id, file) {
 
 async function importFiles(fileList) {
   const files = [...fileList];
-  let n = 0;
+  const groups = new Map();
   for (const file of files) {
     const slot = slotOfFile(file);
     if (!slot) continue;
-    state.slots[slot.id] = await loadSlot(slot.id, file);
-    n++;
+    const m = file.name.match(/(\d{8})[_-]?(\d{6})/);
+    const key = m ? `${m[1]}_${m[2]}` : "upload";
+    if (!groups.has(key)) groups.set(key, { slots: {}, files: 0 });
+    const g = groups.get(key);
+    g.slots[slot.id] = await loadSlot(slot.id, file);
+    g.files++;
   }
-  invalidate();
-  state.synthetic = false;
-  state.scrollFit = n > 0;
-  snapBlock();
-  toast(n ? `已载入 ${n} 个文件` : "没有识别出可用的 CSV / TXT");
+  if (!groups.size) {
+    toast("没有识别出可用的 CSV / TXT");
+    return;
+  }
+  let added = 0;
+  for (const [key, g] of groups) {
+    const isTs = key !== "upload";
+    state.rounds.push({
+      id: newRoundId(),
+      name: isTs ? `会话 ${key.replace("_", " ")}` : (state.rounds.length ? `上传 ${state.rounds.length + 1}` : "上传数据"),
+      detail: isTs ? key.replace("_", " ") : `${g.files} 个文件`,
+      source: "upload",
+      slots: g.slots,
+    });
+    added++;
+  }
+  setActive(state.rounds.length - 1);
+  state.scrollFit = true;
+  toast(`已载入 ${added} 轮数据（共 ${state.rounds.length} 轮）`);
 }
 
 /* 探测站点是否附带实测示例数据（公开演示版不带 sample-upload/） */
@@ -293,14 +313,23 @@ async function loadSample() {
         return [s, await r.text()];
       })
     );
+    const slots = {};
     for (const [s, text] of res) {
       const parsed = s.kind === "csi" ? parseCsi(text) : parseKey(text);
-      state.slots[s.id] = { ...parsed, name: s.file.split("/").pop(), size: text.length };
+      slots[s.id] = { ...parsed, name: s.file.split("/").pop(), size: text.length };
     }
     state.sampleAvailable = true;
-    state.synthetic = false;
-    invalidate();
-    snapBlock();
+    const prev = state.rounds.findIndex((r) => r.source === "sample");
+    const round = {
+      id: prev >= 0 ? state.rounds[prev].id : newRoundId(),
+      name: "真实示例",
+      detail: "2026-10-08 会话",
+      source: "sample",
+      slots,
+    };
+    if (prev >= 0) state.rounds[prev] = round;
+    else state.rounds.push(round);
+    setActive(prev >= 0 ? prev : state.rounds.length - 1);
   } catch (e) {
     state.sampleAvailable = false;
     state.tab = "input";
@@ -320,9 +349,10 @@ function invalidate() {
    目的是让块长、样本量、平稳性都达标，从而看到「数据合格时」的呈现。
    数值仍由同一套估计器算出，不是写死的常量。 */
 
-function synthSeries() {
-  const N = 1800;
-  const rnd = mulberry32(20261008);
+function synthSeries(N, rho, seed) {
+  const n = N || 1800;
+  const RHO = rho == null ? 0.94 : rho;
+  const rnd = mulberry32(seed || 20261008);
   const gauss = () => {
     let u = 0, v = 0;
     while (!u) u = rnd();
@@ -330,11 +360,10 @@ function synthSeries() {
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   };
   const A = 0.86;
-  const RHO = 0.94;
   const sd = Math.sqrt(1 - A * A);
   let x = 0, y = 0, z = 0;
   const ue = [], nb = [], eve = [];
-  for (let t = 0; t < N; t++) {
+  for (let t = 0; t < n; t++) {
     x = A * x + sd * gauss();
     y = A * y + sd * gauss();
     z = A * z + sd * gauss();
@@ -379,25 +408,113 @@ function snapBlock() {
   if (rec) state.L = rec.L;
 }
 
-function loadSynth() {
-  const g = synthSeries();
+/* ---------- 多轮数据模型 ----------
+   每一轮 = 六份原始文件（三方 CSI + 三方密钥）+ 名称/来源。
+   state.slots 始终指向「当前轮」的槽位，计算层因此不用改。 */
+
+let _roundSeq = 0;
+function newRoundId() { return "r" + (++_roundSeq); }
+
+function activeRound() { return state.rounds[state.active] || null; }
+
+function setActive(i) {
+  if (!state.rounds.length) {
+    state.active = 0;
+    state.slots = {};
+    state.synthetic = false;
+    invalidate();
+    return;
+  }
+  const idx = Math.max(0, Math.min(state.rounds.length - 1, Number(i) || 0));
+  state.active = idx;
+  const r = state.rounds[idx];
+  state.slots = r.slots;
+  state.synthetic = r.source === "synthetic";
+  invalidate();
+  snapBlock();
+  try {
+    const A = hasAnalog() ? session().align : null;
+    if (A) state.pSeconds = A.span;
+  } catch (e) { /* 时长沿用旧值 */ }
+}
+
+/* 在「某一轮」的数据上跑一段计算，结束后恢复当前轮 */
+function withRound(r, fn) {
+  const prevSlots = state.slots, prevSynth = state.synthetic, prevL = state.L;
+  state.slots = r.slots;
+  state.synthetic = r.source === "synthetic";
+  invalidate();
+  try { return fn(); }
+  finally {
+    state.slots = prevSlots;
+    state.synthetic = prevSynth;
+    state.L = prevL;
+    invalidate();
+  }
+}
+
+function roundStats(r) {
+  return withRound(r, () => {
+    const A = hasAnalog() ? session().align : null;
+    const d = hasKeys() ? digital() : null;
+    const ac = A ? analogChecks() : [];
+    const dc = d ? digitalChecks() : [];
+    return {
+      span: A ? A.span : null,
+      common: A ? A.common.length : null,
+      ratio: A ? A.ratio : null,
+      spark: A ? A.series.ue : null,
+      nBits: d ? d.nBits : null,
+      lines: d ? d.lines : null,
+      kdr: d ? d.kdr : null,
+      checks: ac.length + dc.length,
+      passed: ac.filter((x) => x.tone === "ok").length + dc.filter((x) => x.tone === "ok").length,
+      hasAnalog: Boolean(A),
+      hasKeys: Boolean(d),
+    };
+  });
+}
+
+/* ---------- 合成演示：一次生成多轮 ---------- */
+
+const SYNTH_ROUNDS = [
+  { name: "方案 A", N: 1800, rho: 0.94, seed: 20261008 },
+  { name: "方案 B", N: 1200, rho: 0.92, seed: 20261009 },
+  { name: "方案 C", N: 900, rho: 0.96, seed: 20261010 },
+  { name: "方案 D", N: 600, rho: 0.90, seed: 20261011 },
+];
+
+function buildSynthRound(cfg) {
+  const g = synthSeries(cfg.N, cfg.rho, cfg.seed);
   const keyA = synthKeyText(107, g.rnd);
   const keyE = synthKeyText(99, g.rnd);
+  const slots = {};
   const jobs = [
-    ["ueCsi", "synth-UE-csi.csv", "csi", synthCsiText(g.ue, g.rnd, "PDSCH")],
-    ["nbCsi", "synth-基站-csi.csv", "csi", synthCsiText(g.nb, g.rnd, "PUSCH")],
-    ["eveCsi", "synth-Eve-csi.csv", "csi", synthCsiText(g.eve, g.rnd, "PEsch")],
-    ["ueKey", "synth-UE-key.txt", "key", keyA],
-    ["nbKey", "synth-基站-key.txt", "key", keyA],
-    ["eveKey", "synth-Eve-key.txt", "key", keyE],
+    ["ueCsi", `${cfg.name}-Alice-csi.csv`, "csi", synthCsiText(g.ue, g.rnd, "PDSCH")],
+    ["nbCsi", `${cfg.name}-Bob-csi.csv`, "csi", synthCsiText(g.nb, g.rnd, "PUSCH")],
+    ["eveCsi", `${cfg.name}-Eve-csi.csv`, "csi", synthCsiText(g.eve, g.rnd, "PEsch")],
+    ["ueKey", `${cfg.name}-Alice-key.txt`, "key", keyA],
+    ["nbKey", `${cfg.name}-Bob-key.txt`, "key", keyA],
+    ["eveKey", `${cfg.name}-Eve-key.txt`, "key", keyE],
   ];
   for (const [id, name, kind, text] of jobs) {
     const parsed = kind === "csi" ? parseCsi(text) : parseKey(text);
-    state.slots[id] = { ...parsed, name, size: text.length };
+    slots[id] = { ...parsed, name, size: text.length };
   }
-  state.synthetic = true;
-  invalidate();
-  snapBlock();
+  return {
+    id: newRoundId(),
+    name: cfg.name,
+    detail: `${cfg.N} s · ρ ${cfg.rho.toFixed(2)}`,
+    source: "synthetic",
+    slots,
+  };
+}
+
+function loadSynth() {
+  const keep = state.rounds.filter((r) => r.source !== "synthetic");
+  const synth = SYNTH_ROUNDS.map(buildSynthRound);
+  state.rounds = [...synth, ...keep];
+  setActive(0);
   state.scrollFit = false;
   render();
 }
@@ -1760,21 +1877,78 @@ function checkTable(items) {
   </tbody></table>`;
 }
 
+/* ---------- 轮次视图 ---------- */
+
+const SOURCE_LABEL = { synthetic: "合成演示", sample: "真实示例", upload: "上传" };
+
+function sparkline(vals) {
+  if (!vals || vals.length < 4) return `<span class="hint">—</span>`;
+  const w = 104, h = 26, pad = 2;
+  const n = Math.min(64, vals.length);
+  const step = vals.length / n;
+  const ys = [];
+  for (let i = 0; i < n; i++) ys.push(vals[Math.floor(i * step)]);
+  const lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys);
+  const span = hi - lo || 1;
+  const pts = ys.map((v, i) => `${(pad + (i / (n - 1)) * (w - pad * 2)).toFixed(1)},${(h - pad - ((v - lo) / span) * (h - pad * 2)).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${cv("--blue", "#2563a8")}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+function roundTable() {
+  const rows = state.rounds.map((r, i) => {
+    const s = roundStats(r);
+    const active = i === state.active;
+    return `<tr class="round-row ${active ? "active" : ""}" data-act="round" data-idx="${i}">
+      <td>
+        <div class="round-name">${esc(r.name)}${active ? ` ${tag("当前", "info")}` : ""}</div>
+        <div class="round-meta">${SOURCE_LABEL[r.source] || "—"}${r.detail ? ` · ${esc(r.detail)}` : ""}</div>
+      </td>
+      <td class="round-spark">${sparkline(s.spark)}</td>
+      <td class="num">${s.span == null ? "—" : `${num(s.span)} s`}</td>
+      <td class="num">${s.ratio == null ? "—" : pct(s.ratio)}</td>
+      <td class="num">${s.nBits == null ? "—" : num(s.nBits)}</td>
+      <td class="num">${s.kdr == null ? "—" : pct(s.kdr, 2)}</td>
+      <td>${s.checks ? tag(`${s.passed}/${s.checks} 通过`, s.passed === s.checks ? "ok" : "warn") : tag("数据不全", "warn")}</td>
+      <td class="num">${active ? `<span class="hint">已选</span>` : `<button class="btn ghost round-btn" data-act="round" data-idx="${i}">选用</button>`}</td>
+    </tr>`;
+  }).join("");
+  return `<table class="data rounds">
+    <thead><tr><th>轮次</th><th>观测</th><th class="num">采集</th><th class="num">重叠</th><th class="num">密钥</th><th class="num">合法方 KDR</th><th>检查</th><th class="num"></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function slotStrip() {
+  return `<div class="slot-strip">${SLOTS.map((s) => {
+    const v = state.slots[s.id];
+    const ok = Boolean(v && v.ok);
+    const party = s.party === "ue" ? "Alice" : s.party === "nb" ? "Bob" : "Eve";
+    const detail = ok
+      ? (s.kind === "csi" ? `${num(v.rows)} 行 · ${v.secs.length} s` : `${num(v.lines.length)} 行 · ${num(v.bits)} bit`)
+      : (v && !v.ok ? (v.error || "解析失败") : "未载入");
+    return `<div class="slot-chip ${ok ? "ok" : ""}">
+      <div class="slot-chip-top"><span>${party} · ${s.kind === "csi" ? "信道" : "密钥"}</span><span class="slot-state">${ok ? "已解析" : v && !v.ok ? "失败" : "待载入"}</span></div>
+      <div class="slot-chip-name">${ok ? esc(v.name) : "—"}</div>
+      <div class="slot-chip-meta">${esc(detail)}</div>
+      <button class="btn file-btn" data-act="pick" data-slot="${s.id}">${ok ? "替换" : "选择"}</button>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 function pageInput() {
   const A = hasAnalog() ? session().align : null;
   const d = hasKeys() ? digital() : null;
-  const summary = [
-    stat("三方重叠时长", A ? `${num(A.common.length)} <small>秒</small>` : "—", A ? `占采集 ${pct(A.ratio)}` : "未导入", "mute"),
-    stat("采集时长", A ? `${num(A.span)} <small>秒</small>` : "—", A ? `${pct(A.gap)} 无同时数据` : "—", "mute"),
-    stat("密钥长度", d ? `${num(d.nBits)} <small>bit</small>` : "—", d ? `${num(d.lines)} 行 × ${d.width}` : "未导入", "mute"),
-    stat("合法方 KDR", d ? pct(d.kdr, 2) : "—", d && d.same ? "完全一致" : "未比对", d ? (d.same ? "ok" : "bad") : "mute"),
-  ].join("");
+  const r = activeRound();
+  const sums = state.rounds.map(roundStats);
+  const totalSpan = sums.reduce((acc, x) => acc + (x.span || 0), 0);
+  const totalBits = sums.reduce((acc, x) => acc + (x.nBits || 0), 0);
+  const totalPassed = sums.reduce((acc, x) => acc + (x.passed || 0), 0);
+  const totalChecks = sums.reduce((acc, x) => acc + (x.checks || 0), 0);
 
   const obs = A ? (() => {
     const n = Math.min(60, A.common.length);
     const series = A.present.map((p) => ({
       name: PARTY_LABEL[p],
-      color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
+      color: p === "ue" ? cv("--blue", "#2563a8") : p === "nb" ? cv("--green", "#2f8a72") : cv("--orange", "#c1602c"),
       xs: Array.from({ length: n }, (_, i) => i),
       ys: A.series[p].slice(0, n),
     }));
@@ -1789,6 +1963,15 @@ function pageInput() {
       xLabel: "时间（秒）", yLabel: "CSI 幅度",
     });
   })() : "";
+
+  const emptyBlock = `<div class="empty-block">
+    <h3>还没有载入数据</h3>
+    <p>支持一次载入多轮：每轮是同一时间戳下的六份文件（三方 CSI + 三方密钥）。</p>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn primary" data-act="load-synth">载入合成演示（4 轮）</button>
+      <button class="btn" data-act="pick-dir">选择会话文件夹</button>
+    </div>
+  </div>`;
 
   return `
   <div class="page-head">
@@ -1812,19 +1995,31 @@ function pageInput() {
     <div class="btn-row" style="margin-bottom:14px">
       <button class="btn primary" data-act="pick-dir">${ico("folder", 14)} 选择会话文件夹</button>
       ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入真实示例</button>`}
-      <button class="btn" data-act="load-synth">载入合成演示</button>
-      <button class="btn ghost" data-act="clear">清空</button>
+      <button class="btn" data-act="load-synth">载入合成演示（4 轮）</button>
+      <button class="btn ghost" data-act="clear">清空全部</button>
     </div>
-    ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 12px">本站为公开演示版，<b>未附带实测采集数据</b>。可用「载入合成演示」体验完整流程，或上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>` : ""}
-    <div class="files">${SLOTS.map(slotCard).join("")}</div>
-    <div class="divider"></div>
-    <div class="stats">${summary}</div>`)}
+    ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 14px">本站为公开演示版，<b>未附带实测采集数据</b>。可用「载入合成演示」体验完整流程，或上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>` : ""}
+    ${!state.rounds.length ? emptyBlock : `
+      <div class="stats" style="margin-bottom:16px">
+        ${stat("轮次", `${state.rounds.length} <small>轮</small>`, "可分别选用", "info")}
+        ${stat("合计采集", `${num(totalSpan)} <small>秒</small>`, "各轮相加", "mute")}
+        ${stat("合计密钥", `${num(totalBits)} <small>bit</small>`, "各轮相加", "mute")}
+        ${stat("检查通过项", `${totalPassed} / ${totalChecks}`, "各轮合计", totalPassed === totalChecks ? "ok" : "mute")}
+      </div>
+      ${roundTable()}
+      <div class="divider"></div>
+      <div class="round-detail-head">
+        <h3>当前轮次文件</h3>
+        <span class="meta">${r ? esc(r.name) : ""}${r && r.detail ? ` · ${esc(r.detail)}` : ""}</span>
+      </div>
+      ${slotStrip()}
+    `}`)}
 
   ${card("前置检查", `
     <div class="charts">
       <div class="plot"><h3>模拟域</h3>${checkTable(analogChecks())}</div>
       <div class="plot"><h3>数字域</h3>${checkTable(digitalChecks())}</div>
-    </div>`, tag(hasAny() ? "已检查" : "未检查", hasAny() ? "info" : ""))}
+    </div>`, r ? tag(r.name, "info") : "")}
 
   ${card("分析参数", `<div class="form">
     ${fieldNumber(`模拟域块长 L（秒）`, "L", 'min="1" step="1"')}
@@ -1838,13 +2033,20 @@ function pageInput() {
     ${fieldNumber("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
   </div>`)}
 
-  ${A ? card("观测预览", obs) : ""}
+  ${A ? card("观测预览", obs, r ? tag(r.name, "info") : "") : ""}
   `;
 }
 
 /* ============================================================
    12. 分析结果
    ============================================================ */
+
+function roundPicker() {
+  if (state.rounds.length <= 1) return "";
+  return `<label class="round-pick">轮次
+    <select data-round-select>${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+  </label>`;
+}
 
 function conclusionBlock(c, sub) {
   if (!c) return "";
@@ -1977,7 +2179,8 @@ function pageResults() {
     return `<div class="page-head"><h2>分析结果</h2></div>
       ${card(null, emptyBox("还没有数据", `<p>先在「评估设置」导入三方数据，或载入示例 / 合成演示。</p><p><button class="btn primary" data-jump="input">去评估设置</button></p>`))}`;
   }
-  const src = state.synthetic ? "合成演示 · 1 组" : `当前会话 · 1 组`;
+  const ar = activeRound();
+  const src = ar ? `${ar.name} · ${state.rounds.length} 轮中第 ${state.active + 1} 轮` : "无数据";
   const segs = [["analog", "模拟域"], ["digital", "数字域"], ["final", "最终密钥"]];
   const segBody = state.seg === "analog"
     ? (hasAnalog() ? segAnalog() : card(null, emptyBox("还缺信道数据", "<p>模拟域需要 Alice、Bob 两方（最好三方）的 CSI/RSSI。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
@@ -1985,7 +2188,7 @@ function pageResults() {
       ? (hasKeys() ? segDigital() : card(null, emptyBox("还缺密钥文件", "<p>数字域需要 Alice / Bob 的 TXT 密钥。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
       : segFinal();
   return `
-  <div class="page-head"><h2>分析结果</h2><span class="meta">${src}</span></div>
+  <div class="page-head"><h2>分析结果</h2><div class="head-tools">${roundPicker()}<span class="meta">${src}</span></div></div>
   <div class="toolbar">
     <div class="segments" role="group" aria-label="分析阶段">${segs.map(([id, name]) => `<button data-act="seg" data-seg="${id}" aria-pressed="${state.seg === id}">${name}</button>`).join("")}</div>
     <span class="meta">当前阶段：${(segs.find((s) => s[0] === state.seg) || segs[0])[1]}</span>
@@ -2025,7 +2228,7 @@ function pageReport() {
   ];
 
   return `
-  <div class="page-head"><h2>评估报告</h2><span class="meta">${state.synthetic ? "合成演示" : "当前会话"} · ${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div>
+  <div class="page-head"><h2>评估报告</h2><div class="head-tools">${roundPicker()}<span class="meta">${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div></div>
 
   <div class="concl ${tone}">
     <div class="concl-head"><span class="concl-tag">${esc(label)}</span><span class="meta">两域 + 熵预算</span></div>
@@ -2151,6 +2354,11 @@ function fingerprint() {
 document.addEventListener("change", (e) => {
   const el = e.target;
   if (!el.dataset) return;
+  if (el.dataset.roundSelect !== undefined) {
+    setActive(Number(el.value));
+    render();
+    return;
+  }
   if (el.dataset.field) {
     const k = el.dataset.field;
     if (el.type === "checkbox") state[k] = el.checked;
@@ -2187,8 +2395,15 @@ document.addEventListener("click", async (e) => {
   }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
+  if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
   if (act === "clear") {
-    state.slots = {}; state.synthetic = false; invalidate(); render(); return;
+    state.rounds = [];
+    state.active = 0;
+    state.slots = {};
+    state.synthetic = false;
+    invalidate();
+    render();
+    return;
   }
   if (act === "load-sample") { await loadSample(); render(); return; }
   if (act === "load-synth") { loadSynth(); render(); return; }

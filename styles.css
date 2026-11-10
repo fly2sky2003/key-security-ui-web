@@ -785,4 +785,60 @@ table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
 .quant-bits { letter-spacing: 0.14em; }
 @media (max-width: 760px) {
   .flow { display: block; overflow-x: auto; white-space: nowrap; }
+}/* ---------- 多轮数据 ---------- */
+.head-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.round-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.round-pick select {
+  min-height: 34px; padding: 5px 10px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--paper); color: var(--ink); font: inherit;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.round-pick select:hover { border-color: var(--line-strong); }
+.round-pick select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.15); }
+
+.rounds { margin-top: 2px; }
+.round-row { cursor: pointer; }
+.round-row td { vertical-align: middle; }
+.round-row:hover td { background: var(--paper-2); }
+.round-row.active td { background: linear-gradient(90deg, var(--pale), transparent 72%); }
+.round-row.active td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.round-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.round-meta { font-size: 12px; color: var(--faint); margin-top: 2px; }
+.round-spark { width: 112px; }
+.round-spark .spark { display: block; opacity: 0.92; }
+.round-btn { min-height: 28px; padding: 3px 10px; font-size: 12.5px; }
+
+.slot-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.slot-chip {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 12px; display: grid; gap: 3px; min-width: 0;
+  background: linear-gradient(180deg, var(--paper-2), var(--paper));
+  transition: transform var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast);
+}
+.slot-chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--line-strong); }
+.slot-chip.ok { border-color: var(--line-strong); }
+.slot-chip-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
+.slot-state { font-size: 11.5px; font-weight: 500; color: var(--faint); }
+.slot-chip.ok .slot-state { color: var(--green); }
+.slot-chip-name { font-family: var(--font-mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+.slot-chip-meta { font-size: 12px; color: var(--faint); }
+.slot-chip .file-btn { justify-self: start; margin-top: 4px; }
+
+.round-detail-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.round-detail-head h3 { margin: 0; }
+
+.empty-block {
+  text-align: center; padding: 34px 12px;
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--paper-2), var(--paper));
+}
+.empty-block h3 { justify-content: center; margin-bottom: 8px; }
+.empty-block p { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; }
+
+@media (max-width: 980px) {
+  .slot-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .round-spark { display: none; }
+}
+@media (max-width: 640px) {
+  .slot-strip { grid-template-columns: 1fr; }
 }
