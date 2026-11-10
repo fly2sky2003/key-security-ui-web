@@ -2720,6 +2720,7 @@ function pageReport() {
   </div>`;
 
   const rhoL = A ? acfAt(A.common, A.series.ue, state.L) : null;
+  const hi = (v) => `<b class="num">${v}</b>`;
   const findings = [
     {
       name: "模拟域",
@@ -2788,11 +2789,26 @@ function pageReport() {
       <span class="concl-pill"><i>熵预算</i><b>${b.raw < 0 ? "不可行" : num(b.safe)}</b><em>${b.raw < 0 ? "" : "bit"}</em></span>
       <span class="concl-pill"><i>余量</i><b>${actual == null || b.raw < 0 ? "—" : num(b.safe - actual)}</b><em>bit</em></span>
     </div>
-    <ul class="concl-list">
-      <li>${u ? `模拟域：U_L ${fx(u.base.U, 3)} bit/s，ρ(${state.L} s) = ${fx(rhoL, 3)}，${rhoL != null && rhoL <= 0.2 ? "块间近似独立" : "块间独立未满足"}。` : "模拟域：暂无信道数据。"}</li>
-      <li>${d ? `数字域：KDR ${pct(d.kdr, 2)} / ${pct(d.eveRate, 2)}，NIST ${t ? `${t.passed}/${t.judged.length}` : "—"}，${pre ? `条件熵 ≥ ${num(Math.round(pre.hmin))} bit` : "条件熵不可估"}。` : "数字域：暂无密钥数据。"}</li>
-      <li>${actual != null && b.raw >= 0 ? `最终密钥：提取 ${num(actual)} bit，预算 ${num(b.safe)} bit，${feasible ? `余量 ${num(b.safe - actual)} bit` : `超出 ${num(actual - b.safe)} bit`}。` : "最终密钥：熵预算不可用。"}</li>
-    </ul>
+    <div class="concl-points">
+      <div class="concl-point">
+        <span class="point-tag">模拟域</span>
+        <p>${u
+          ? `这块信道每秒能提供约 ${hi(fx(u.base.U, 3))} 比特的共享信息，前后两段的相关性已降到 ${hi(fx(rhoL, 3))}，${rhoL != null && rhoL <= 0.2 ? "基本可以当作相互独立的样本" : "还没有完全去相关，只能作描述性参考"}。`
+          : "还没有信道数据，暂时无法评价。"}</p>
+      </div>
+      <div class="concl-point">
+        <span class="point-tag">数字域</span>
+        <p>${d
+          ? `双方密钥${d.same ? "逐位完全一致" : `有 ${hi(num(d.diff))} 比特对不上`}；Eve 与合法方的不一致率为 ${hi(pct(d.eveRate, 2))}，${t.passed === t.judged.length ? `随机性检验 ${hi(t.judged.length)} 项全部通过` : `随机性检验只通过 ${hi(`${t.passed}/${t.judged.length}`)} 项`}；${pre ? `条件最小熵不低于 ${hi(num(Math.round(pre.hmin)))} 比特` : "条件最小熵暂时估算不出来"}。`
+          : "还没有密钥数据，暂时无法评价。"}</p>
+      </div>
+      <div class="concl-point">
+        <span class="point-tag">最终密钥</span>
+        <p>${actual != null && b.raw >= 0
+          ? `实际提取 ${hi(num(actual))} 比特，建议上限为 ${hi(num(b.safe))} 比特，${feasible ? `还留着 ${hi(num(b.safe - actual))} 比特余量` : `超出了 ${hi(num(actual - b.safe))} 比特`}。`
+          : "熵预算暂时不可用，无法判断长度是否合理。"}</p>
+      </div>
+    </div>
   </div>
 
   ${card("关键发现", `<div class="findings">${findings.map(findingCard).join("")}</div>`)}
