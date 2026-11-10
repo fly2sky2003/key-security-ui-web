@@ -1159,16 +1159,16 @@ function digitalConclusion() {
 
   const rows = [
     {
-      k: "双方密钥一致 KDR",
-      v: d.same == null ? "—" : `${num(d.diff)} bit`,
+      k: "合法方 KDR",
+      v: d.kdr == null ? "—" : pct(d.kdr, 2),
       rule: "= 0",
       tone: d.same ? "ok" : "bad",
       verdict: d.same == null ? "缺数据" : d.same ? "通过" : "硬失败",
     },
     {
-      k: "Eve 逐比特一致率",
+      k: "Eve 和合法方的 KDR",
       v: d.eveRate == null ? "—" : pct(d.eveRate, 2),
-      rule: "50% ± 5%",
+      rule: "≈ 50%（±5%）",
       tone: d.eveRate == null ? "mute" : eveOK ? "ok" : "bad",
       verdict: d.eveRate == null ? "缺 Eve 数据" : eveOK ? "通过" : "异常",
     },
@@ -1215,12 +1215,12 @@ function digitalConclusion() {
   } else if (!nistAll || !eveOK) {
     label = "质量异常";
     tone = "warn";
-    text = `双方密钥一致（0 bit 差异），但${!nistAll ? `随机性检验只通过 ${t.passed} / ${t.judged.length} 项` : `Eve 侧逐比特一致率为 ${pct(d.eveRate, 2)}，偏离 50% 超过 5%`}——需要先排查量化或隐私放大实现。`;
+    text = `双方密钥一致（0 bit 差异），但${!nistAll ? `随机性检验只通过 ${t.passed} / ${t.judged.length} 项` : `Eve 和合法方的 KDR 为 ${pct(d.eveRate, 2)}，偏离 50% 超过 5%`}——需要先排查量化或隐私放大实现。`;
   } else {
     label = "合格 · 保密性未证明";
     tone = "warn";
     text = `密钥 ${num(d.nBits)} bit（${num(d.lines)} 行 × ${d.width}）：双方逐位一致（0 bit 差异），NIST SP 800-22 可判定的 ${t.judged.length} 项全部通过，`
-      + `Eve 侧逐比特一致率 ${pct(d.eveRate, 2)}（偏离 50% 仅 ${fx(Math.abs(z), 2)}σ，样本 ${num(nE)} bit），`
+      + `Eve 和合法方的 KDR 为 ${pct(d.eveRate, 2)}（偏离 50% 仅 ${fx(Math.abs(z), 2)}σ，样本 ${num(nE)} bit），`
       + `8 bit 块最小熵 ${fx(g8.hmin, 3)} bit，整体最小熵按块数 × 单块 H_min 估计约 ${num(Math.round(hminAll))} bit（占密钥长度的 ${fx((hminAll / d.nBits) * 100, 1)}%）。`;
     note = `这些是质量与随机性证据。保密强度由条件最小熵 H_min(K|E) 给出，它需要隐私放大前的量化比特；本数据只有放大后的密钥，`
       + `因此数字域不声称「Eve 的剩余不确定性 ≥ X bit」，也不把 ${num(Math.round(hminAll))} bit 当作对 Eve 的保密熵。`;
@@ -1895,13 +1895,13 @@ function pageDigital() {
   </div>
 
   ${card("一致性断言", `<div class="figures">
-    ${fig("UE ↔ 基站", d.same ? "完全一致" : `${num(d.diff)} bit 差异`, d.same ? "0 个字符不同" : "流程硬失败", d.same ? "ok" : "bad")}
-    ${fig("Eve ↔ UE", d.eveRate == null ? "—" : pct(d.eveRate, 2), "比特差异，独立序列应≈50%", d.eveRate == null ? "mute" : Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
+    ${fig("UE ↔ 基站 的 KDR", d.kdr == null ? "—" : pct(d.kdr, 2), d.same ? "完全一致，0 bit 差异" : "流程硬失败", d.same ? "ok" : "bad")}
+    ${fig("Eve ↔ UE 的 KDR", d.eveRate == null ? "—" : pct(d.eveRate, 2), "比特差异，独立序列应≈50%", d.eveRate == null ? "mute" : Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
     ${fig("密钥总量", `${num(d.nBits)} bit`, `${num(d.lines)} 行 × ${d.width}`, "mute")}
     ${fig("Eve 侧长度", `${num(d.nBitsE)} bit`, `${num(d.linesE)} 行`, "mute")}
   </div>
   <p class="card-subnote">
-    Eve 与合法方的差异接近 50%，说明两串密钥互不相关；若显著低于 50%，说明 Eve 能复现合法密钥，属于严重异常。
+    KDR 是两串密钥逐位异或后 1 的占比。Eve 和合法方的 KDR 接近 50%，说明两串密钥互不相关；若显著低于 50%，说明 Eve 能复现合法密钥，属于严重异常。
   </p>`)}
 
   ${card("分组与最小熵", `<table class="compact group-table">
@@ -2066,7 +2066,7 @@ function pageReport() {
   const digitalQuant = d && t
     ? [
       q(`NIST ${t.passed}/${t.judged.length}`),
-      q(`Eve 一致率 ${pct(d.eveRate, 2)}`),
+      q(`Eve KDR ${pct(d.eveRate, 2)}`),
       q(`H_min ${fx(d.groups[8].hmin, 3)} / 8 bit`),
     ].join(" · ")
     : "无密钥数据";
@@ -2122,7 +2122,7 @@ function pageReport() {
   const gaps = [
     "隐私放大前的量化比特 —— 决定 H_min(K|E)，缺了它就没有保密强度",
     `满足 ρ(L) ≤ 0.2 且块数 ≥ ${MIN_BLOCKS} 的采集 —— 当前 ${A ? `${A.common.length} 秒` : "—"}${tau ? `，按外推需约 ${num(Math.round(MIN_BLOCKS * tau))} 秒` : ""}`,
-    "Eve 侧信息量的上界 —— 目前只有逐比特一致率作为间接证据",
+    "Eve 侧信息量的上界 —— 目前只有 Eve 和合法方的 KDR 作为间接证据",
   ];
 
   const condRows = [
@@ -2470,7 +2470,7 @@ function exportJson() {
       "结论分模拟域与数字域分别给出，不支持合并为单一安全等级",
       "熵与协议参数为假设输入，不是实测值",
       "模拟域结论依赖联合高斯、块均值、块间独立三项假设，块均值方向上低估信息量",
-      "随机性检验与逐比特一致率只排除统计异常，不能证明密钥对 Eve 保密",
+      "随机性检验与 KDR 只排除统计异常，不能证明密钥对 Eve 保密",
       "缺少隐私放大前基线，无法估计条件最小熵 H_min(K|E)",
     ],
     fingerprint: fingerprint(),
