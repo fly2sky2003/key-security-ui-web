@@ -1528,10 +1528,14 @@ function sceneSvg() {
   /* RIS 面板：9x9 单元，错峰闪烁 */
   const risCells = (() => {
     let s = "";
-    for (let r = 0; r < 6; r++) {
-      for (let c = 0; c < 6; c++) {
-        const x = 530 + c * 6.4, y = 66 + r * 6.4;
-        s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="4.4" height="4.4" rx="0.8" class="ris-cell" style="animation-delay:${((r + c) * 0.12).toFixed(2)}s"/>`;
+    const cell = 4.4, gap = 2, n = 6;
+    const span = n * cell + (n - 1) * gap;      // 36.4
+    const x0 = 528 + (44 - span) / 2;           // 531.8
+    const y0 = 64 + (44 - span) / 2;            // 67.8
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const x = x0 + c * (cell + gap), y = y0 + r * (cell + gap);
+        s += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${cell}" height="${cell}" rx="0.8" class="ris-cell" style="animation-delay:${((r + c) * 0.12).toFixed(2)}s"/>`;
       }
     }
     return s;
@@ -1539,8 +1543,8 @@ function sceneSvg() {
 
   const ris = state.risOn
     ? `<g class="ris-group">
-        <path id="risA" class="path-ris" d="M266 152 L530 96" fill="none"/>
-        <path id="risB" class="path-ris" d="M570 96 L830 152" fill="none"/>
+        <path id="risA" class="path-ris" d="M266 152 L528 86" fill="none"/>
+        <path id="risB" class="path-ris" d="M572 86 L830 152" fill="none"/>
         <rect class="ris-frame" x="528" y="64" width="44" height="44" rx="5"/>
         ${risCells}
         <text x="550" y="54" text-anchor="middle" class="label">RIS</text>
