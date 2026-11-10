@@ -2576,7 +2576,7 @@ function segFinal() {
     : b.raw < 0
       ? `<div class="note bad">参数不可行：熵 ${num(b.hmin)} bit 覆盖不了 ${num(b.spent)} bit 的扣除项。</div>`
       : feasible
-        ? `<div class="note">当前配置可行：建议最多 ${num(b.safe)} bit，实际 ${num(actual)} bit，余量 ${num(b.safe - actual)} bit。</div>`
+        ? ""
         : `<div class="note bad">提取量超出预算：建议最多 ${num(b.safe)} bit，实际 ${num(actual)} bit，超出 ${num(actual - b.safe)} bit。</div>`;
 
   return `
