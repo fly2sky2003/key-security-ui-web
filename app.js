@@ -1319,7 +1319,15 @@ function analogConclusion() {
     note = "该值以块均值代表块内全部信息，方向上低估；它衡量的是块均值序列里的信息量，与「512 bit/行」的量化构造不同，不能直接换算成密钥长度。";
   }
 
-  return { label, short: label, tone, text, rows, note };
+  const brief = (() => {
+    if (p.tone === "bad") return "前提不成立，不给数值结论";
+    if (label === "样本不足") return `块数 <b class="num">${u ? u.n : 0}</b> 块，低于 ${MIN_BLOCKS} 块下限`;
+    if (label === "当前块长不可用") return `ρ = <b class="num">${fx(rho, 3)}</b> 大于 0.2，建议改用 <b class="num">${rec.L}</b> 秒`;
+    if (label === "不可量化") return `块间不独立（ρ = <b class="num">${fx(rho, 3)}</b>），仅作描述性参考`;
+    return `密钥率上限 <b class="num">${fx(u.base.U, 3)}</b> bit/s · 信息优势 <b class="num">${u.base.D == null ? "—" : fx(u.base.D, 3)}</b> bit/s`;
+  })();
+
+  return { label, short: label, tone, text, rows, note, brief };
 }
 
 /* ============================================================
@@ -1422,7 +1430,15 @@ function digitalConclusion() {
       + `因此数字域不声称「Eve 的剩余不确定性 ≥ X bit」，也不把 ${num(Math.round(hminAll))} bit 当作对 Eve 的保密熵。`;
   }
 
-  return { label, short: label === "合格 · 保密性未证明" ? "合格·未证明" : label === "合格 · 保密强度可估" ? "合格·可估" : label, tone, text, rows, note };
+  const brief = (() => {
+    if (p.tone === "bad") return "前提不成立，不给数值结论";
+    if (label === "硬失败") return `合法方 KDR = <b class="num">${pct(d.kdr, 2)}</b>`;
+    if (label === "质量异常") return `NIST <b class="num">${t.passed} / ${t.judged.length}</b> 通过，需排查实现`;
+    if (label === "合格 · 保密强度可估") return `条件最小熵 <b class="num">${num(Math.round(pre.hmin))}</b> bit · 密钥 <b class="num">${num(d.nBits)}</b> bit`;
+    return "密钥质量合格 · 保密强度未证明";
+  })();
+
+  return { label, short: label === "合格 · 保密性未证明" ? "合格·未证明" : label === "合格 · 保密强度可估" ? "合格·可估" : label, tone, text, rows, note, brief };
 }
 
 function statusOf(page) {
@@ -2533,6 +2549,11 @@ function stageNav(nextSeg, nextName) {
   return `<div class="stage-nav"><button class="btn primary" data-act="seg" data-seg="${nextSeg}">下一步：${nextName} ${ico("arrow-right", 15)}</button></div>`;
 }
 
+function conclusionBar(c) {
+  if (!c) return "";
+  return `<div class="concl ${c.tone} concl-bar"><span class="concl-tag">${esc(c.label)}</span><span class="concl-brief">${c.brief || ""}</span></div>`;
+}
+
 function conclusionBlock(c, sub) {  if (!c) return "";
   return `<div class="concl ${c.tone}">
     <div class="concl-head"><span class="concl-tag">${esc(c.label)}</span>${sub ? `<span class="meta">${esc(sub)}</span>` : ""}</div>
@@ -2578,7 +2599,7 @@ function segAnalog() {
     ${stat("平稳性", st ? `${st.level} <small>${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}</small>` : "—", "", st ? st.tone : "mute")}
   </div>`)}
 
-  ${conclusionBlock(analogConclusion(), "")}
+  ${conclusionBar(analogConclusion())}
   ${stageNav("digital", "数字域")}
   `;
 }
@@ -2615,7 +2636,7 @@ function segDigital() {
         <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td><td class="num">${tag(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td></tr>`;
       return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
     }).join("")}</tbody></table>`)}
-  ${conclusionBlock(digitalConclusion(), "")}
+  ${conclusionBar(digitalConclusion())}
   ${stageNav("final", "最终密钥")}
   `;
 }
@@ -2653,10 +2674,7 @@ function segFinal() {
       { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
     ])}
     ${verdict}`)}
-  <div class="concl mute">
-    <div class="concl-head"><span class="concl-tag">只给上界，不给认证</span></div>
-    <p class="concl-text">预算算的是「不超过多少 bit」，不是「至少有这么多安全熵」。真正可认证的安全长度还缺隐私放大前的量化比特。</p>
-  </div>
+  <div class="concl mute concl-bar"><span class="concl-tag">只给上界</span><span class="concl-brief">预算是「不超过多少 bit」，不是「至少有多少安全熵」</span></div>
   `;
 }
 

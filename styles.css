@@ -1229,3 +1229,24 @@ table.hist-table th:nth-child(6) { width: 120px; }
   filter: blur(38px);
   pointer-events: none;
 }
+/* ---------- 分段结论：一行式 ---------- */
+.concl-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+}
+.concl-bar .concl-tag { font-size: 19px; }
+.concl-brief { font-size: 15px; line-height: 1.6; color: var(--ink); }
+.concl-brief .num {
+  font-family: var(--font-num);
+  font-weight: 650;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  padding: 0 1px;
+}
+.concl.ok .concl-brief .num { color: var(--green); }
+.concl.warn .concl-brief .num { color: var(--orange); }
+.concl.bad .concl-brief .num { color: var(--red); }
+.concl.mute .concl-brief .num { color: var(--ink); }
