@@ -2477,8 +2477,11 @@ function roundPicker() {
   return `<label class="round-pick"><select data-round-select aria-label="轮次">${state.rounds.map((r, i) => `<option value="${i}" ${i === state.active ? "selected" : ""}>第 ${i + 1} 轮</option>`).join("")}</select></label>`;
 }
 
-function conclusionBlock(c, sub) {
-  if (!c) return "";
+function stageNav(nextSeg, nextName) {
+  return `<div class="stage-nav"><button class="btn primary" data-act="seg" data-seg="${nextSeg}">下一步：${nextName} ${ico("arrow-right", 15)}</button></div>`;
+}
+
+function conclusionBlock(c, sub) {  if (!c) return "";
   return `<div class="concl ${c.tone}">
     <div class="concl-head"><span class="concl-tag">${esc(c.label)}</span>${sub ? `<span class="meta">${esc(sub)}</span>` : ""}</div>
     <p class="concl-text">${esc(c.text)}</p>
@@ -2524,6 +2527,7 @@ function segAnalog() {
   </div>`)}
 
   ${conclusionBlock(analogConclusion(), "")}
+  ${stageNav("digital", "数字域")}
   `;
 }
 
@@ -2560,6 +2564,7 @@ function segDigital() {
       return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
     }).join("")}</tbody></table>`)}
   ${conclusionBlock(digitalConclusion(), "")}
+  ${stageNav("final", "最终密钥")}
   `;
 }
 
@@ -2809,7 +2814,7 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.tab) { if (state.tab === "input" && el.dataset.tab !== "input") stopObsTimer(); state.tab = el.dataset.tab; render(); return; }
   if (el.dataset.jump) { if (state.tab === "input" && el.dataset.jump !== "input") stopObsTimer(); state.tab = el.dataset.jump; render(); return; }
 
-  if (act === "seg") { state.seg = el.dataset.seg; render(); return; }
+  if (act === "seg") { state.seg = el.dataset.seg; render(); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
   if (act === "set-L") { state.L = Number(el.dataset.l) || state.L; render(); return; }
   if (act === "play") {
     state.playing = !state.playing;
