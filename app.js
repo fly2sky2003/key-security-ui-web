@@ -2644,25 +2644,74 @@ function pageReport() {
   const actual = d ? d.nBits : null;
   const A = hasAnalog() ? session().align : null;
   const u = hasAnalog() ? estimateUL(state.L) : null;
+  const t = nist();
+  const feasible = actual != null && b.raw >= 0 && actual <= b.safe;
+  const seconds = Math.max(1, Number(state.pSeconds) || 1);
+  const succ = Math.min(100, Math.max(0, Number(state.pSucc) || 0));
+  const netRate = actual == null ? null : (actual * (succ / 100)) / seconds;
   const tone = !hasAny() ? "mute" : p.tone === "bad" ? "bad" : "warn";
   const label = !hasAny() ? "尚未导入" : p.tone === "bad" ? "前提不成立" : "分域结论 · 不合并评级";
 
-  const findings = [
-    { h: "信道源", t: u ? `块条件互信息 ${fx(u.base.U, 3)} bit/s${ac && ac.label === "模型下可达" ? "" : "（描述性）"}，合法方相对 Eve 的信息优势 ${u.base.D == null ? "—" : fx(u.base.D, 3)} bit/s。` : "未导入信道数据。" },
-    { h: "数字域", t: d ? `合法方 KDR ${pct(d.kdr, 2)}，Eve 和合法方的 KDR ${pct(d.eveRate, 2)}，NIST ${nist() ? nist().passed : 0}/${nist() ? nist().judged.length : 0} 通过。` : "未导入密钥。" },
-    { h: "最终判断", t: actual == null ? "缺少密钥，无法比对提取长度。" : b.raw < 0 ? "熵假设覆盖不了扣除项，参数不可行。" : `建议提取 ${num(b.safe)} bit，实际 ${num(actual)} bit，${actual <= b.safe ? "在预算内" : "超出预算"}；保密强度仍缺 H_min(K|E)。` },
-  ];
+  const findingCard = (o) => `<div class="finding ${o.tone || ""}">
+    <div class="finding-head"><span class="finding-name">${o.name}</span>${o.tag || ""}</div>
+    <div class="finding-kpis">${(o.kpis || []).map((k) => `<div class="finding-kpi"><b class="${k.tone || ""}">${k.v}</b><span>${k.k}</span></div>`).join("")}</div>
+    ${o.meter ? `<div class="finding-meter">
+      <div class="track"><i class="${o.meter.tone || ""}" style="width:${Math.max(2, Math.min(100, o.meter.pct))}%"></i></div>
+      <div class="cap"><span>${o.meter.left}</span><span>${o.meter.right}</span></div>
+    </div>` : ""}
+  </div>`;
 
-  const rows = [
-    ["三方数据", A ? `${num(A.common.length)} 秒（${pct(A.ratio)}）` : "—", A && A.ratio >= 0.5 ? tag("已对齐", "ok") : tag("未对齐", "warn")],
-    ["模拟域", ac ? ac.label : "—", ac ? tag(ac.tone === "ok" ? "可用" : ac.tone === "bad" ? "不可用" : "参考", ac.tone) : "—"],
-    ["数字域", dc ? dc.label : "—", dc ? tag(dc.tone === "ok" ? "通过" : dc.tone === "bad" ? "失败" : "未证明", dc.tone) : "—"],
-    ["熵预算", b.raw < 0 ? "参数不可行" : `${num(b.safe)} bit`, b.raw < 0 ? tag("不可行", "bad") : tag("假设输入", "warn")],
-    ["安全长度", "不予认证", tag("缺 H_min(K|E)", "warn")],
+  const rhoL = A ? acfAt(A.common, A.series.ue, state.L) : null;
+  const findings = [
+    {
+      name: "模拟域",
+      tone: ac ? (ac.tone === "ok" ? "ok" : ac.tone === "bad" ? "bad" : "warn") : "",
+      tag: tag(ac ? ac.short : "无数据", ac ? ac.tone : ""),
+      kpis: [
+        { v: u ? fx(u.base.U, 3) : "—", k: "U_L · bit/s" },
+        { v: u && u.base.D != null ? fx(u.base.D, 3) : "—", k: "D_L · bit/s" },
+      ],
+      meter: rhoL == null ? null : {
+        pct: Math.min(1, rhoL) * 100,
+        tone: rhoL <= 0.2 ? "ok" : "warn",
+        left: `块间相关 ρ(${state.L} s) · 判据 ≤ 0.2`, right: fx(rhoL, 3),
+      },
+    },
+    {
+      name: "数字域",
+      tone: dc ? (dc.tone === "ok" ? "ok" : dc.tone === "bad" ? "bad" : "warn") : "",
+      tag: tag(dc ? dc.short : "无数据", dc ? dc.tone : ""),
+      kpis: [
+        { v: d ? pct(d.kdr, 2) : "—", k: "合法方 KDR", tone: d ? (d.same ? "ok" : "bad") : "" },
+        { v: d ? pct(d.eveRate, 2) : "—", k: "Eve 与合法方 KDR" },
+        { v: t ? `${t.passed}/${t.judged.length}` : "—", k: "NIST 通过" },
+      ],
+      meter: t ? {
+        pct: (t.passed / Math.max(1, t.judged.length)) * 100,
+        tone: t.passed === t.judged.length ? "ok" : "warn",
+        left: "NIST SP 800-22", right: `${t.passed}/${t.judged.length}`,
+      } : null,
+    },
+    {
+      name: "最终判断",
+      tone: actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad",
+      tag: tag(actual == null ? "待密钥" : b.raw < 0 ? "参数不可行" : feasible ? "在预算内" : "超出预算",
+        actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad"),
+      kpis: [
+        { v: b.raw < 0 ? "—" : num(b.safe), k: "建议提取 · bit" },
+        { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
+        { v: netRate == null ? "—" : fx(netRate, 1), k: "净速率 · bit/s" },
+      ],
+      meter: actual != null && b.safe > 0 ? {
+        pct: Math.min(1, actual / b.safe) * 100,
+        tone: feasible ? "ok" : "bad",
+        left: "预算占用", right: pct(actual / b.safe, 1),
+      } : null,
+    },
   ];
 
   return `
-  <div class="page-head"><h2>评估报告</h2><div class="head-tools">${roundPicker()}<span class="meta">${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div></div>
+  <div class="page-head"><h2>评估报告</h2><div class="head-tools"><span class="meta">${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div></div>
 
   <div class="concl ${tone}">
     <div class="concl-head"><span class="concl-tag">${esc(label)}</span><span class="meta">两域 + 熵预算</span></div>
@@ -2670,6 +2719,8 @@ function pageReport() {
       ? "导入数据后会在这里给出分域结论：模拟域回答信道里有多少可用的秘密信息，数字域回答提取出的密钥是否合格。"
       : p.tone === "bad" ? esc(p.note) : `本次评估不给出合并的安全等级。模拟域：${ac ? ac.label : "无数据"}；数字域：${dc ? dc.label : "无数据"}；${actual == null ? "熵预算待密钥导入后比对" : b.raw < 0 ? "熵预算参数不可行" : `熵预算留有 ${num(b.safe - actual)} bit 余量`}。`}</p>
   </div>
+
+  ${card("关键发现", `<div class="findings">${findings.map(findingCard).join("")}</div>`)}
 
   ${card("秘密熵预算", barRows([
     { label: "调和前熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: "info" },
@@ -2680,20 +2731,22 @@ function pageReport() {
     { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
   ]))}
 
-  ${card("关键发现", findings.map((f) => `<p style="margin:0 0 14px"><b style="color:var(--blue);font-weight:600;display:block;margin-bottom:3px">${f.h}</b>${f.t}</p>`).join(""))}
-
-  ${card("评估项", `<table class="data"><thead><tr><th>评估项</th><th>结果</th><th class="num">状态</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")}</tbody></table>`)}
-
   ${card("报告与历史", `<div class="btn-row no-print">
       <button class="btn primary" data-act="export">导出 JSON</button>
       <button class="btn" data-act="print">打印 / 另存 PDF</button>
       <button class="btn ghost" data-act="save-history">存入历史</button>
     </div>
     <div class="divider"></div>
-    ${state.history.length ? `<table class="data"><thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
-      <tbody>${state.history.map((h) => `<tr><td>${esc(h.at)}</td><td class="meta">${esc(h.scene)}</td><td class="num">${h.L}s</td><td class="num">${num(h.bits)}</td>
-        <td>${h.analog ? tag(h.analog.short, h.analog.tone) : "—"}</td><td>${h.digital ? tag(h.digital.short, h.digital.tone) : "—"}</td></tr>`).join("")}</tbody></table>`
+    ${state.history.length ? `<div class="hist-wrap"><table class="data hist-table">
+      <thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
+      <tbody>${state.history.map((h) => `<tr>
+        <td>${esc(h.at)}</td>
+        <td class="hist-scene">${esc(h.scene)}</td>
+        <td class="num">${h.L} s</td>
+        <td class="num">${num(h.bits)}</td>
+        <td>${h.analog ? tag(h.analog.short, h.analog.tone) : "—"}</td>
+        <td>${h.digital ? tag(h.digital.short, h.digital.tone) : "—"}</td>
+      </tr>`).join("")}</tbody></table></div>`
       : `<p class="meta">还没有历史记录。</p>`}`)}
   `;
 }
