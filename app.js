@@ -59,7 +59,7 @@ const state = {
   motion: "静止",
   ris: "有",
   attack: "被动窃听",
-  channel: "未认证",
+  channel: "已认证",
   feature: "CSI",
   csiUse: "幅度",
   eveObs: true,
