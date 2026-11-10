@@ -1059,3 +1059,31 @@ table.hist-table th:nth-child(4) { width: 96px; }
 table.hist-table th:nth-child(5),
 table.hist-table th:nth-child(6) { width: 120px; }
 .hist-scene { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ---------- 评估结论：胶囊 + 分点 ---------- */
+.verdict-pill {
+  display: inline-flex; align-items: center;
+  padding: 3px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 650; letter-spacing: 0.01em;
+  border: 1px solid var(--line-strong); color: var(--muted); background: var(--paper);
+}
+.verdict-pill.ok { color: var(--green); border-color: rgba(47, 138, 114, 0.55); background: var(--ok-soft); }
+.verdict-pill.warn { color: var(--orange); border-color: rgba(193, 96, 44, 0.55); background: var(--warn-soft); }
+.verdict-pill.bad { color: var(--red); border-color: rgba(176, 58, 58, 0.55); background: var(--bad-soft); }
+.concl-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 13px; }
+.concl-pill {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast);
+}
+.concl-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-2); border-color: var(--line-strong); }
+.concl-pill i { font-style: normal; font-size: 12px; color: var(--muted); }
+.concl-pill b { font: 650 18px/1.1 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.concl-pill em { font-style: normal; font-size: 11.5px; color: var(--faint); }
+.concl-pill.ok b { color: var(--green); }
+.concl-pill.mute b { color: var(--muted); }
+.concl-list { margin: 13px 0 0; padding-left: 20px; }
+.concl-list li { font-size: 14px; line-height: 1.8; color: var(--ink); }
+.concl-list li + li { margin-top: 2px; }
+.concl-list li::marker { color: var(--blue); }

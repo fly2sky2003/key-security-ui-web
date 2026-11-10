@@ -416,6 +416,31 @@ function synthKeyText(lines, rnd) {
   return arr.join("\n");
 }
 
+/* 合成演示专用的「隐私放大前」比特：Alice/Bob 有少量不一致，Eve 只有部分相关。
+   有了它，条件最小熵 H_min(K|E) 才有输入，最终结论才能闭合。 */
+function synthPreBits(rnd, n) {
+  const a = new Uint8Array(n), b = new Uint8Array(n), e = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const bit = rnd() < 0.5 ? 1 : 0;
+    a[i] = bit;
+    b[i] = rnd() < 0.02 ? 1 - bit : bit;
+    e[i] = rnd() < 0.56 ? bit : 1 - bit;
+  }
+  return { a, b, e, n };
+}
+
+/* 从放大前比特估计条件最小熵（逐比特独立模型） */
+function preStats() {
+  const r = activeRound();
+  const pre = r && r.pre;
+  if (!pre) return null;
+  let agree = 0;
+  for (let i = 0; i < pre.n; i++) if (pre.a[i] === pre.e[i]) agree++;
+  const pE = agree / pre.n;
+  const perBit = -Math.log2(Math.max(pE, 1 - pE));
+  return { n: pre.n, pE, perBit, hmin: perBit * pre.n };
+}
+
 function snapBlock() {
   const rec = recommendedBlock();
   if (rec) state.L = rec.L;
@@ -521,6 +546,7 @@ function buildSynthRound(cfg, idx) {
     detail: `${cfg.N} s · ρ ${cfg.rho.toFixed(2)}`,
     source: "synthetic",
     slots,
+    pre: synthPreBits(g.rnd, 131072),
   };
 }
 
@@ -1300,6 +1326,7 @@ function digitalConclusion() {
   const nistAll = t.passed === t.judged.length;
   const eveOK = d.eveRate != null && Math.abs(d.eveRate - 0.5) < 0.05;
   const hminAll = g8.hmin != null ? g8.nb * g8.hmin : null;
+  const pre = preStats();
 
   const rows = [
     {
@@ -1337,7 +1364,13 @@ function digitalConclusion() {
       tone: "mute",
       verdict: "估算",
     },
-    {
+    pre ? {
+      k: "条件最小熵 H_min(K|E)",
+      v: `${num(Math.round(pre.hmin))} bit`,
+      rule: `逐比特 ≥ ${fx(pre.perBit, 2)} bit`,
+      tone: "ok",
+      verdict: "可估",
+    } : {
       k: "条件最小熵 H_min(K|E)",
       v: "不可估计",
       rule: "需放大前量化比特",
@@ -1360,6 +1393,13 @@ function digitalConclusion() {
     label = "质量异常";
     tone = "warn";
     text = `双方密钥一致（0 bit 差异），但${!nistAll ? `随机性检验只通过 ${t.passed} / ${t.judged.length} 项` : `Eve 和合法方的 KDR 为 ${pct(d.eveRate, 2)}，偏离 50% 超过 5%`}——需要先排查量化或隐私放大实现。`;
+  } else if (pre) {
+    label = "合格 · 保密强度可估";
+    tone = "ok";
+    text = `密钥 ${num(d.nBits)} bit（${num(d.lines)} 行 × ${d.width}）：双方逐位一致，NIST SP 800-22 可判定的 ${t.judged.length} 项全部通过，`
+      + `Eve 和合法方的 KDR 为 ${pct(d.eveRate, 2)}。放大前 ${num(pre.n)} bit 中 Eve 与 Alice 的一致率为 ${pct(pre.pE, 2)}，`
+      + `逐比特条件最小熵 ${fx(pre.perBit, 2)} bit，整段条件最小熵 H_min(K|E) ≈ ${num(Math.round(pre.hmin))} bit。`;
+    note = "条件最小熵由合成数据的隐私放大前比特实测得到，采用逐比特独立模型；真实数据若提供放大前比特，可同上计算。";
   } else {
     label = "合格 · 保密性未证明";
     tone = "warn";
@@ -1370,7 +1410,7 @@ function digitalConclusion() {
       + `因此数字域不声称「Eve 的剩余不确定性 ≥ X bit」，也不把 ${num(Math.round(hminAll))} bit 当作对 Eve 的保密熵。`;
   }
 
-  return { label, short: label === "合格 · 保密性未证明" ? "合格·未证明" : label, tone, text, rows, note };
+  return { label, short: label === "合格 · 保密性未证明" ? "合格·未证明" : label === "合格 · 保密强度可估" ? "合格·可估" : label, tone, text, rows, note };
 }
 
 function statusOf(page) {
@@ -2649,8 +2689,15 @@ function pageReport() {
   const seconds = Math.max(1, Number(state.pSeconds) || 1);
   const succ = Math.min(100, Math.max(0, Number(state.pSucc) || 0));
   const netRate = actual == null ? null : (actual * (succ / 100)) / seconds;
-  const tone = !hasAny() ? "mute" : p.tone === "bad" ? "bad" : "warn";
-  const label = !hasAny() ? "尚未导入" : p.tone === "bad" ? "前提不成立" : "分域结论 · 不合并评级";
+  const pre = preStats();
+  const keysOk = Boolean(d && d.same !== false && t && t.passed === t.judged.length);
+  const complete = Boolean(pre && p.tone === "ok" && keysOk && feasible && pre.hmin >= (actual || 0));
+  const verdict = !hasAny()
+    ? { text: "尚未导入", tone: "mute" }
+    : p.tone === "bad" ? { text: "条件不满足", tone: "bad" }
+      : complete ? { text: "满足提取要求", tone: "ok" }
+        : (ac && ac.label === "不可量化") ? { text: "仅描述性分析", tone: "warn" }
+          : { text: "模型下条件性结果", tone: "warn" };
 
   const findingCard = (o) => `<div class="finding ${o.tone || ""}">
     <div class="finding-head"><span class="finding-name">${o.name}</span>${o.tag || ""}</div>
@@ -2697,11 +2744,17 @@ function pageReport() {
       tone: actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad",
       tag: tag(actual == null ? "待密钥" : b.raw < 0 ? "参数不可行" : feasible ? "在预算内" : "超出预算",
         actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad"),
-      kpis: [
-        { v: b.raw < 0 ? "—" : num(b.safe), k: "建议提取 · bit" },
-        { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
-        { v: netRate == null ? "—" : fx(netRate, 1), k: "净速率 · bit/s" },
-      ],
+      kpis: pre
+        ? [
+          { v: b.raw < 0 ? "—" : num(b.safe), k: "熵预算 · bit" },
+          { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
+          { v: num(Math.round(pre.hmin)), k: "条件熵 · bit", tone: "ok" },
+        ]
+        : [
+          { v: b.raw < 0 ? "—" : num(b.safe), k: "建议提取 · bit" },
+          { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
+          { v: netRate == null ? "—" : fx(netRate, 1), k: "净速率 · bit/s" },
+        ],
       meter: actual != null && b.safe > 0 ? {
         pct: Math.min(1, actual / b.safe) * 100,
         tone: feasible ? "ok" : "bad",
@@ -2713,11 +2766,22 @@ function pageReport() {
   return `
   <div class="page-head"><h2>评估报告</h2><div class="head-tools"><span class="meta">${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div></div>
 
-  <div class="concl ${tone}">
-    <div class="concl-head"><span class="concl-tag">${esc(label)}</span><span class="meta">两域 + 熵预算</span></div>
-    <p class="concl-text">${!hasAny()
-      ? "导入数据后会在这里给出分域结论：模拟域回答信道里有多少可用的秘密信息，数字域回答提取出的密钥是否合格。"
-      : p.tone === "bad" ? esc(p.note) : `本次评估不给出合并的安全等级。模拟域：${ac ? ac.label : "无数据"}；数字域：${dc ? dc.label : "无数据"}；${actual == null ? "熵预算待密钥导入后比对" : b.raw < 0 ? "熵预算参数不可行" : `熵预算留有 ${num(b.safe - actual)} bit 余量`}。`}</p>
+  <div class="concl ${verdict.tone}">
+    <div class="concl-head">
+      <span class="concl-tag">评估结论</span>
+      <span class="verdict-pill ${verdict.tone}">${verdict.text}</span>
+    </div>
+    <div class="concl-pills">
+      <span class="concl-pill"><i>密钥</i><b>${d ? num(d.nBits) : "—"}</b><em>bit</em></span>
+      <span class="concl-pill ${pre ? "ok" : "mute"}"><i>条件熵</i><b>${pre ? num(Math.round(pre.hmin)) : "—"}</b><em>bit</em></span>
+      <span class="concl-pill"><i>熵预算</i><b>${b.raw < 0 ? "不可行" : num(b.safe)}</b><em>${b.raw < 0 ? "" : "bit"}</em></span>
+      <span class="concl-pill"><i>余量</i><b>${actual == null || b.raw < 0 ? "—" : num(b.safe - actual)}</b><em>bit</em></span>
+    </div>
+    <ul class="concl-list">
+      <li>${u ? `模拟域：U_L ${fx(u.base.U, 3)} bit/s，ρ(${state.L} s) = ${fx(rhoL, 3)}，${rhoL != null && rhoL <= 0.2 ? "块间近似独立" : "块间独立未满足"}。` : "模拟域：暂无信道数据。"}</li>
+      <li>${d ? `数字域：KDR ${pct(d.kdr, 2)} / ${pct(d.eveRate, 2)}，NIST ${t ? `${t.passed}/${t.judged.length}` : "—"}，${pre ? `条件熵 ≥ ${num(Math.round(pre.hmin))} bit` : "条件熵不可估"}。` : "数字域：暂无密钥数据。"}</li>
+      <li>${actual != null && b.raw >= 0 ? `最终密钥：提取 ${num(actual)} bit，预算 ${num(b.safe)} bit，${feasible ? `余量 ${num(b.safe - actual)} bit` : `超出 ${num(actual - b.safe)} bit`}。` : "最终密钥：熵预算不可用。"}</li>
+    </ul>
   </div>
 
   ${card("关键发现", `<div class="findings">${findings.map(findingCard).join("")}</div>`)}
@@ -3004,6 +3068,10 @@ function exportJson() {
       groups: Object.fromEntries(BS.map((bb) => [bb, { groups: d.groups[bb].nb, states: d.groups[bb].states, ratio: d.groups[bb].ratio, hmin: d.groups[bb].hmin }])),
       note: "密钥为隐私放大输出，条件最小熵不可估计",
     } : null,
+    conditionalMinEntropy: preStats() ? (() => {
+      const q = preStats();
+      return { bits: q.n, eveAgreement: q.pE, bitsPerBit: q.perBit, hminBits: q.hmin, model: "逐比特独立，来自隐私放大前比特" };
+    })() : null,
     randomTests: t ? { n: t.n, passed: t.passed, judged: t.judged.length, rows: t.rows.map((r) => ({ name: r.name, p: r.p, verdict: r.note })) } : null,
     budget: {
       assumed: true, rawBits: b.n, codeRate: b.rate, publicLeakBits: b.leak, otherPublicBits: b.other,
