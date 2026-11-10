@@ -1829,91 +1829,173 @@ function pageHome() {
    11. 评估设置
    ============================================================ */
 
-/* ---------- 场景示意（随选择变化） ---------- */
+/* ---------- 场景示意（第一页城市场景的缩小版，随选择变化） ---------- */
 function sceneMini() {
   const env = state.env;
   const attack = state.attack;
-  const ris = state.ris === "有";
+  const risOn = state.ris === "有";
   const motion = state.motion;
+  const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const anim = state.playing && !still;
 
-  const envBg = env === "室内"
-    ? `<g>
-        <rect x="18" y="18" width="484" height="204" rx="12" fill="var(--paper)" opacity="0.55" stroke="var(--line-strong)"/>
-        <rect x="40" y="38" width="104" height="66" rx="4" fill="var(--pale)" stroke="var(--line-strong)"/>
-        <line x1="92" y1="38" x2="92" y2="104" stroke="var(--line-strong)"/>
-        <line x1="40" y1="71" x2="144" y2="71" stroke="var(--line-strong)"/>
-        <rect x="376" y="176" width="96" height="10" rx="4" fill="var(--line-strong)" opacity="0.45"/>
-        <path d="M396 176v-26c0-9 7-16 16-16s16 7 16 16v26" fill="none" stroke="var(--green)" stroke-width="1.6" opacity="0.55"/>
-      </g>`
-    : env === "车载"
-      ? `<g>
-          <rect x="0" y="176" width="520" height="56" fill="var(--line-strong)" opacity="0.3"/>
-          <line x1="0" y1="204" x2="520" y2="204" stroke="var(--paper)" stroke-width="2" stroke-dasharray="16 14"/>
-          <g transform="translate(24,128)">
-            <rect x="0" y="16" width="96" height="30" rx="9" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.4"/>
-            <path d="M14 16 L26 2 H70 L82 16" fill="var(--pale)" stroke="var(--blue)" stroke-width="1.2"/>
-            <circle cx="22" cy="48" r="7" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.5"/>
-            <circle cx="74" cy="48" r="7" fill="var(--paper)" stroke="var(--blue)" stroke-width="1.5"/>
-          </g>
-        </g>`
-      : `<g>
-          <rect x="26" y="62" width="74" height="106" rx="3" fill="var(--line-strong)" opacity="0.35"/>
-          <rect x="112" y="86" width="56" height="82" rx="3" fill="var(--line-strong)" opacity="0.26"/>
-          <rect x="352" y="72" width="62" height="96" rx="3" fill="var(--line-strong)" opacity="0.28"/>
-          <rect x="428" y="52" width="70" height="116" rx="3" fill="var(--line-strong)" opacity="0.35"/>
-          <rect x="0" y="168" width="520" height="16" fill="var(--line-strong)" opacity="0.3"/>
-          <circle cx="196" cy="150" r="9" fill="var(--green)" opacity="0.4"/>
-          <rect x="194" y="156" width="3" height="14" fill="var(--green)" opacity="0.5"/>
-        </g>`;
+  const tree = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">
+    <ellipse cx="0" cy="10" rx="12" ry="3.2" class="tree-shadow"/>
+    <rect x="-2" y="-6" width="4" height="15" rx="1.6" class="trunk"/>
+    <circle cx="0" cy="-12" r="11" class="crown c1"/>
+    <circle cx="-6.5" cy="-7" r="7.6" class="crown c2"/>
+    <circle cx="6.5" cy="-7" r="7.2" class="crown c3"/>
+  </g>`;
+
+  const person = (x, y, cls, color, extra) => `<g class="person ${cls}" transform="translate(${x} ${y})">
+    <circle r="15" class="avatar-bg"/>
+    <circle r="15" class="avatar-ring" stroke="${color}"/>
+    <circle cy="-4.4" r="3.8" fill="${color}"/>
+    <path d="M-6.8 8.2c0-3.8 3-6.4 6.8-6.4s6.8 2.6 6.8 6.4z" fill="${color}"/>
+    ${extra || ""}
+  </g>`;
+
+  const tape = (x, y, bits, key) => `<g class="tape">
+    <clipPath id="mclip-${key}"><rect x="${x - 43}" y="${y - 9}" width="86" height="18" rx="4"/></clipPath>
+    <rect class="tape-bg" x="${x - 43}" y="${y - 9}" width="86" height="18" rx="4"/>
+    <g clip-path="url(#mclip-${key})"><text class="tape-text" x="${x - 39}" y="${y + 3}">${bits}${bits}</text></g>
+  </g>`;
+
+  const carAt = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">
+    <ellipse cx="0" cy="17" rx="30" ry="4" class="car-shadow"/>
+    <path d="M-30 2c0-4 2-6 6-6h12l8-9h14l8 9h10c4 0 6 2 6 6v7c0 3-2 5-5 5h-54c-3 0-5-2-5-5z" class="car-body"/>
+    <path d="M-8 -4h12l6 7h-20z" class="car-glass"/>
+    <path d="M8 -4h10l6 7h-14z" class="car-glass"/>
+    <circle cx="-16" cy="12" r="5.2" class="car-wheel"/><circle cx="-16" cy="12" r="2.2" class="car-hub"/>
+    <circle cx="16" cy="12" r="5.2" class="car-wheel"/><circle cx="16" cy="12" r="2.2" class="car-hub"/>
+  </g>`;
+
+  /* 室内：墙面 + 窗 + 绿植 */
+  const indoorBg = `<g>
+      <rect x="0" y="0" width="520" height="300" fill="var(--base)"/>
+      <rect x="0" y="0" width="520" height="196" fill="url(#wallGrad)"/>
+      <rect x="0" y="196" width="520" height="104" fill="var(--paper)" opacity="0.55"/>
+      <rect x="32" y="54" width="92" height="76" rx="4" fill="#d8e8fa" stroke="var(--line-strong)" stroke-width="2"/>
+      <line x1="78" y1="54" x2="78" y2="130" stroke="var(--line-strong)" stroke-width="2"/>
+      <line x1="32" y1="92" x2="124" y2="92" stroke="var(--line-strong)" stroke-width="2"/>
+      <rect x="150" y="150" width="220" height="10" rx="3" fill="var(--line-strong)" opacity="0.35"/>
+      ${tree(430, 190, 0.95)}
+    </g>`;
+
+  /* 室外：天际线 + 楼 + 树 + 路 + 车 */
+  const outdoorBg = `<g>
+      <rect x="0" y="0" width="520" height="300" fill="var(--base)"/>
+      <rect x="0" y="0" width="520" height="206" fill="url(#skyGrad)"/>
+      <g class="skyline"><rect x="8" y="118" width="42" height="42"/><rect x="108" y="126" width="34" height="34"/><rect x="300" y="120" width="38" height="40"/><rect x="470" y="112" width="40" height="48"/></g>
+      <rect class="bldg" x="20" y="86" width="66" height="120" rx="3"/>
+      <rect class="roof" x="17" y="81" width="72" height="5" rx="1.5"/>
+      <g><rect class="win lit" x="32" y="100" width="6" height="8" rx="1"/><rect class="win" x="46" y="100" width="6" height="8" rx="1"/><rect class="win lit" x="60" y="100" width="6" height="8" rx="1"/>
+         <rect class="win" x="32" y="118" width="6" height="8" rx="1"/><rect class="win lit" x="46" y="118" width="6" height="8" rx="1"/><rect class="win" x="60" y="118" width="6" height="8" rx="1"/>
+         <rect class="win lit" x="32" y="136" width="6" height="8" rx="1"/><rect class="win" x="46" y="136" width="6" height="8" rx="1"/><rect class="win" x="60" y="136" width="6" height="8" rx="1"/></g>
+      <rect class="bldg" x="434" y="76" width="68" height="130" rx="3"/>
+      <rect class="roof" x="431" y="71" width="74" height="5" rx="1.5"/>
+      <g><rect class="win" x="446" y="92" width="6" height="8" rx="1"/><rect class="win lit" x="460" y="92" width="6" height="8" rx="1"/><rect class="win" x="474" y="92" width="6" height="8" rx="1"/>
+         <rect class="win lit" x="446" y="110" width="6" height="8" rx="1"/><rect class="win" x="460" y="110" width="6" height="8" rx="1"/><rect class="win lit" x="474" y="110" width="6" height="8" rx="1"/>
+         <rect class="win" x="446" y="128" width="6" height="8" rx="1"/><rect class="win" x="460" y="128" width="6" height="8" rx="1"/><rect class="win" x="474" y="128" width="6" height="8" rx="1"/></g>
+      <rect class="road" x="0" y="206" width="520" height="46" fill="url(#roadGrad)"/>
+      <line x1="0" y1="229" x2="520" y2="229" stroke="var(--paper)" stroke-width="2" stroke-dasharray="16 14"/>
+      ${tree(100, 206, 0.86)}${tree(392, 206, 0.8)}
+      ${carAt(452, 236, 0.78)}
+    </g>`;
+
+  /* 车载：道路 + 车 + 速度线 */
+  const carBg = `<g>
+      <rect x="0" y="0" width="520" height="300" fill="var(--base)"/>
+      <rect x="0" y="0" width="520" height="206" fill="url(#skyGrad)"/>
+      <g class="skyline"><rect x="20" y="126" width="40" height="36"/><rect x="70" y="120" width="34" height="42"/><rect x="410" y="124" width="38" height="38"/></g>
+      <rect class="road" x="0" y="196" width="520" height="56" fill="url(#roadGrad)"/>
+      <line x1="0" y1="224" x2="520" y2="224" stroke="var(--paper)" stroke-width="2" stroke-dasharray="16 14"/>
+      ${carAt(96, 226, 1.15)}
+    </g>`;
+
+  const bg = env === "室内" ? indoorBg : env === "车载" ? carBg : outdoorBg;
 
   const speed = motion === "静止"
     ? ""
-    : `<g stroke="var(--blue)" stroke-width="1.2" opacity="0.45" stroke-linecap="round">
-        <line x1="${motion === "高速" ? 92 : 104}" y1="112" x2="122" y2="112"/>
-        <line x1="${motion === "高速" ? 84 : 100}" y1="120" x2="122" y2="120"/>
-        ${motion === "高速" ? '<line x1="100" y1="128" x2="122" y2="128"/>' : ""}
+    : `<g stroke="var(--blue)" stroke-width="1.4" opacity="0.4" stroke-linecap="round">
+        <line x1="${motion === "高速" ? 74 : 88}" y1="142" x2="120" y2="142"/>
+        <line x1="${motion === "高速" ? 66 : 82}" y1="152" x2="120" y2="152"/>
+        ${motion === "高速" ? '<line x1="82" y1="162" x2="120" y2="162"/>' : ""}
       </g>`;
 
   const eveLinks = attack === "被动窃听"
-    ? `<line x1="176" y1="112" x2="252" y2="180" stroke="var(--orange)" stroke-width="1.5" stroke-dasharray="6 5"/>
-       <line x1="344" y1="112" x2="288" y2="180" stroke="var(--orange)" stroke-width="1.5" stroke-dasharray="6 5"/>`
+    ? `<line x1="162" y1="160" x2="248" y2="242" stroke="var(--orange)" stroke-width="1.6" stroke-dasharray="6 5"/>
+       <line x1="358" y1="160" x2="272" y2="242" stroke="var(--orange)" stroke-width="1.6" stroke-dasharray="6 5"/>`
     : `<g>
-        <circle cx="260" cy="120" r="7" fill="var(--red)"/>
-        <path d="M260 113v-12M250 120h-12M270 120h12" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round"/>
-        <path d="M238 96a30 30 0 0 1 44 0M230 86a42 42 0 0 1 60 0" fill="none" stroke="var(--red)" stroke-width="1.2" opacity="0.55"/>
-        <line x1="260" y1="132" x2="260" y2="146" stroke="var(--red)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <circle cx="260" cy="160" r="7" fill="var(--red)"/>
+        <path d="M260 153v-11M253 160h-11M267 160h11" stroke="var(--red)" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M240 138a26 26 0 0 1 40 0M232 129a38 38 0 0 1 56 0" fill="none" stroke="var(--red)" stroke-width="1.3" opacity="0.55"/>
       </g>`;
 
-  const risGroup = ris
+  const risCells = (() => {
+    let s = "";
+    const n = 4, cell = 6, gap = 2.4;
+    const span = n * cell + (n - 1) * gap;
+    const x0 = 238 + (44 - span) / 2, y0 = 74 + (44 - span) / 2;
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      s += `<rect x="${(x0 + c * (cell + gap)).toFixed(2)}" y="${(y0 + r * (cell + gap)).toFixed(2)}" width="${cell}" height="${cell}" rx="1" class="ris-cell" style="animation-delay:${((r + c) * 0.12).toFixed(2)}s"/>`;
+    }
+    return s;
+  })();
+
+  const ris = risOn
     ? `<g>
-        <line x1="176" y1="112" x2="256" y2="52" stroke="var(--green)" stroke-width="1.4" stroke-dasharray="5 5"/>
-        <line x1="344" y1="112" x2="264" y2="52" stroke="var(--green)" stroke-width="1.4" stroke-dasharray="5 5"/>
-        <rect x="240" y="32" width="40" height="40" rx="4" fill="var(--paper)" stroke="var(--green)" stroke-width="1.6"/>
-        ${[0, 1, 2].map((r) => [0, 1, 2].map((c) => `<rect x="${246 + c * 10}" y="${38 + r * 10}" width="6" height="6" fill="var(--green)" opacity="0.75"/>`).join("")).join("")}
-        <text x="260" y="26" text-anchor="middle" font-size="11" fill="var(--muted)">RIS</text>
+        <path class="path-ris" d="M152 146 L244 96" fill="none"/>
+        <path class="path-ris" d="M368 146 L276 96" fill="none"/>
+        <rect class="ris-frame" x="238" y="74" width="44" height="44" rx="5"/>
+        ${risCells}
+        <text x="260" y="64" text-anchor="middle" class="label" font-size="12">RIS</text>
       </g>`
     : "";
 
-  return `<div class="scene scene-mini"><svg viewBox="0 0 520 240" role="img" aria-label="场景示意：${esc(env)}，${esc(attack)}">
-    ${envBg}
-    ${risGroup}
-    <line x1="176" y1="112" x2="344" y2="112" stroke="url(#gLegalMini)" stroke-width="2.4"/>
+  const pulse = anim ? `<circle class="pulse" r="19"/>` : "";
+
+  return `<div class="scene scene-mini"><svg viewBox="0 0 520 300" role="img" aria-label="场景示意：${esc(env)}，${esc(attack)}">
     <defs>
-      <linearGradient id="gLegalMini" gradientUnits="userSpaceOnUse" x1="176" y1="112" x2="360" y2="112">
-        <stop offset="0" stop-color="#1a4a86"/><stop offset="1" stop-color="#2aa8c4"/>
+      <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#eef4fb"/><stop offset="0.65" stop-color="#e4ecf6"/><stop offset="1" stop-color="#dfe8f3"/>
       </linearGradient>
+      <linearGradient id="wallGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f7f9fc"/><stop offset="1" stop-color="#e8eef6"/>
+      </linearGradient>
+      <linearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c3d0e0"/><stop offset="1" stop-color="#b2c1d5"/>
+      </linearGradient>
+      <linearGradient id="bldgGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c4d2e3"/><stop offset="1" stop-color="#a9bad0"/>
+      </linearGradient>
+      <linearGradient id="treeGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#4f9d84"/><stop offset="1" stop-color="#2f7a63"/>
+      </linearGradient>
+      <linearGradient id="gLegalMini" gradientUnits="userSpaceOnUse" x1="156" y1="152" x2="364" y2="152">
+        <stop offset="0" stop-color="#1a4a86"/><stop offset="0.55" stop-color="#2563a8"/><stop offset="1" stop-color="#2aa8c4"/>
+      </linearGradient>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="2.4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
     </defs>
+    ${bg}
+    <path id="legalMini" class="path-legal-mini" d="M166 152 H354" fill="none" stroke="url(#gLegalMini)" stroke-width="2.6"/>
+    ${anim ? `<polygon class="arrow" points="-4,-3.6 4.8,0 -4,3.6" fill="url(#gLegalMini)">
+      <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto"><mpath href="#legalMini"/></animateMotion>
+    </polygon>` : ""}
+    ${ris}
     ${eveLinks}
     ${speed}
-    <circle cx="160" cy="112" r="14" fill="var(--paper)" stroke="var(--blue)" stroke-width="2.4"/>
-    <circle cx="360" cy="112" r="14" fill="var(--paper)" stroke="var(--blue)" stroke-width="2.4"/>
-    <circle cx="260" cy="196" r="14" fill="var(--paper)" stroke="var(--orange)" stroke-width="2.4"/>
-    <text x="160" y="90" text-anchor="middle" font-size="14" fill="var(--ink)">Alice</text>
-    <text x="360" y="90" text-anchor="middle" font-size="14" fill="var(--ink)">Bob</text>
-    <text x="260" y="224" text-anchor="middle" font-size="14" fill="var(--ink)">Eve</text>
-    <text x="160" y="140" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">101100</text>
-    <text x="360" y="140" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">101100</text>
-    <text x="260" y="176" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="monospace">011010</text>
+    ${person(150, 152, "legal", "var(--blue)", anim ? `<circle class="tx" r="16.5"/>` : "")}
+    ${person(370, 152, "legal", "var(--blue)")}
+    ${person(260, 250, "eve", "var(--orange)", pulse)}
+    <text x="150" y="128" text-anchor="middle" class="label" font-size="12">Alice</text>
+    <text x="370" y="128" text-anchor="middle" class="label" font-size="12">Bob</text>
+    <text x="260" y="280" text-anchor="middle" class="label" font-size="12">Eve</text>
+    ${tape(150, 192, "101100101100", "a")}
+    ${tape(370, 192, "101100101100", "b")}
+    ${tape(260, 290, "011010011001", "e")}
   </svg></div>`;
 }
 
@@ -2703,6 +2785,10 @@ function exportJson() {
   if (t === "fit") state.tab = "input";
   const sg = params.get("seg");
   if (sg === "analog" || sg === "digital" || sg === "final") state.seg = sg;
+  ["env", "motion", "attack", "channel", "feature", "csiUse", "ris"].forEach((k) => {
+    const v = params.get(k);
+    if (v) state[k] = v;
+  });
   const lq = Number(params.get("L"));
   if (Number.isFinite(lq) && lq > 0) state.L = lq;
   if (params.get("synth") === "1") {
