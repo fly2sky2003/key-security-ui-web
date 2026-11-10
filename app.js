@@ -2621,10 +2621,12 @@ function pageResults() {
       ? (hasKeys() ? segDigital() : card(null, emptyBox("还缺密钥文件", "<p>数字域需要 Alice / Bob 的 TXT 密钥。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
       : segFinal();
   return `
-  <div class="page-head"><h2>分析结果</h2><div class="head-tools">${roundPicker()}</div></div>
-  <div class="toolbar">
+  <div class="page-head"><h2>分析结果</h2></div>
+  <div class="stage-bar">
+    <span></span>
     <div class="segments" role="group" aria-label="分析阶段">${segs.map(([id, name]) => `<button data-act="seg" data-seg="${id}" aria-pressed="${state.seg === id}">${name}</button>`).join("")}</div>
-    </div>
+    <div class="stage-bar-right">${roundPicker()}</div>
+  </div>
   ${segBody}
   `;
 }
