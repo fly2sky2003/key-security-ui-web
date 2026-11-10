@@ -40,6 +40,11 @@ function kicker(id) {
 
 const state = {
   page: "scene",
+  tab: "home",
+  seg: "analog",
+  risOn: true,
+  jamOn: false,
+  playing: true,
   slots: {},
   L: 4,
   b: 8,
@@ -271,13 +276,13 @@ function probeSample() {
     .then((r) => { state.sampleAvailable = r.ok; })
     .catch(() => { state.sampleAvailable = false; })
     .then(() => {
-      if (state.sampleAvailable === false && state.page === "import") render();
+      if (state.sampleAvailable === false && state.tab === "input") render();
     });
 }
 
 async function loadSample() {
   if (state.sampleAvailable === false) {
-    state.page = "import";
+    state.tab = "input";
     toast("本站是公开演示版，未附带实测数据 —— 请用「载入合成演示」或上传自己的 CSV / TXT");
     return;
   }
@@ -299,7 +304,7 @@ async function loadSample() {
     snapBlock();
   } catch (e) {
     state.sampleAvailable = false;
-    state.page = "import";
+    state.tab = "input";
     invalidate();
     toast("实测示例数据未随本站发布 —— 请载入合成演示，或上传自己的 CSV / TXT");
   }
@@ -1130,8 +1135,7 @@ function analogConclusion() {
   } else {
     label = "模型下可达";
     tone = "warn";
-    text = `在联合高斯 + 块均值 + 块间独立三项假设下，该信道可支撑的密钥率上限 U_L = ${fx(u.base.U, 3)} bit/s`
-      + `（90% CI ${u.ciU ? `${fx(u.ciU.lo, 3)}–${fx(u.ciU.hi, 3)}` : "—"}），`
+    text = `在联合高斯 + 块均值 + 块间独立三项假设下，该信道可支撑的密钥率上限 U_L = ${fx(u.base.U, 3)} bit/s，`
       + `合法方相对 Eve 的信息优势 D_L = ${u.base.D == null ? "—" : fx(u.base.D, 3)} bit/s > 0，即存在正的保密裕量`
       + `（L = ${u.L} 秒，${u.n} 块）。`;
     note = "该值以块均值代表块内全部信息，方向上低估；它衡量的是块均值序列里的信息量，与「512 bit/行」的量化构造不同，不能直接换算成密钥长度。";
@@ -1258,68 +1262,90 @@ function statusOf(page) {
 }
 
 /* ============================================================
-   8. 通用视图件
+   8. 视图件（对照交接包 reference 重做）
    ============================================================ */
 
+const TABS = [
+  { id: "home", name: "总览" },
+  { id: "input", name: "评估设置" },
+  { id: "results", name: "分析结果" },
+  { id: "report", name: "评估报告" },
+];
+
+function cv(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (e) { return fallback; }
+}
+
+const ICONS = {
+  tower: '<path d="M12 3v3M8.5 21 12 11l3.5 10M6 7c-1.8 1.6-1.8 4.4 0 6M18 7c1.8 1.6 1.8 4.4 0 6M9.5 5h5"/>',
+  wave: '<path d="M3 12h2l2-5 3 10 3-8 2 3h4"/>',
+  binary: '<path d="M6 5h4v6H6zM14 13h4v6h-4z"/><path d="M10 8h4M14 16h-4"/>',
+  merge: '<path d="M6 4v5c0 2 2 3 6 3s6 1 6 3v5"/><path d="M18 4v5c0 2-2 3-6 3s-6 1-6 3v5"/>',
+  key: '<circle cx="8" cy="12" r="4"/><path d="M12 12h9M17 12v3M20 12v2"/>',
+  radio: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>',
+  phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/>',
+  check: '<path d="M4 12.5 9 17.5 20 6.5"/>',
+  alert: '<path d="M12 4 3 20h18L12 4z"/><path d="M12 10v4M12 17v.5"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+};
+
+function ico(name, size) {
+  const s = size || 16;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+}
+
 function card(title, body, right) {
-  return `<article class="card">
-    <div class="card-head"><h3>${title}</h3>${right ? `<div class="chips">${right}</div>` : ""}</div>
+  return `<section class="card">
+    ${title === null ? "" : `<div class="card-head"><h3>${title}</h3>${right ? `<div class="meta">${right}</div>` : ""}</div>`}
     ${body}
-  </article>`;
+  </section>`;
 }
-function readLine(title, value, tone) {
-  return `<div class="read"><span>${title}</span><b class="${tone || ""}">${value}</b></div>`;
+
+function stat(k, v, note, tone) {
+  return `<div class="stat"><div class="k">${k}</div><div class="v ${tone || ""}">${v}</div>${note ? `<div class="n">${note}</div>` : ""}</div>`;
 }
-function fig(label, value, note, tone) {
-  return `<div class="fig"><span>${label}</span><b class="${tone || ""}">${value}</b>${note ? `<em>${note}</em>` : ""}</div>`;
+
+function kv(k, v, tone) {
+  return `<div class="kv"><span>${k}</span><b class="${tone || ""}">${v}</b></div>`;
 }
-function checkTable(items) {
-  const body = items.map((it) => {
-    const on = state.checkOpen === it.id;
-    const row = `<tr class="check-tr ${on ? "open" : ""}" data-act="check" data-check="${it.id}">
-      <td class="c-idx">${it.idx}</td>
-      <td class="c-name">${it.name}</td>
-      <td class="c-rule">${it.rule}</td>
-      <td class="c-actual">${it.actual}</td>
-      <td class="c-state">${chip(it.verdict, it.tone)}</td>
-    </tr>`;
-    if (!on) return row;
-    return row + `<tr class="check-note"><td colspan="5"><div class="check-pop">
-      <div class="check-pop-head"><strong>${it.name}</strong></div>
-      ${it.formula ? `<div class="formula">${tex(it.formula, true)}</div>` : ""}
-      <p>${it.explain}</p>
-    </div></td></tr>`;
-  }).join("");
-  return `<table class="compact checks-table">
-    <thead><tr><th></th><th>检查项</th><th>判据</th><th>实测</th><th class="c-state">判定</th></tr></thead>
-    <tbody>${body}</tbody></table>`;
+
+function tag(text, tone) {
+  return `<span class="tag ${tone || ""}">${esc(text)}</span>`;
 }
-function meter(v, tone) {
-  return `<div class="meter"><i class="${tone || ""}" style="width:${Math.max(0, Math.min(1, v)) * 100}%"></i></div>`;
+
+function emptyBox(title, body) {
+  return `<div class="empty"><h3>${title}</h3>${body || ""}</div>`;
 }
-function lineChart(series, opts) {
-  const o = opts || {};
-  const w = o.w || 660, h = o.h || 210;
-  const pad = { l: o.yLabel ? 64 : 44, r: 16, t: 14, b: o.xLabel ? 46 : 28 };
+
+/* ============================================================
+   9. 图表（SVG）
+   ============================================================ */
+
+function lineChart(series, o) {
+  const opt = o || {};
+  const w = opt.w || 720, h = opt.h || 240;
+  const pad = { l: opt.yLabel ? 62 : 42, r: 14, t: 12, b: opt.xLabel ? 44 : 24 };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
-  const yMin = o.yMin == null ? -0.2 : o.yMin;
-  const yMax = o.yMax == null ? 1 : o.yMax;
+  const yMin = opt.yMin == null ? -0.2 : opt.yMin;
+  const yMax = opt.yMax == null ? 1 : opt.yMax;
   const xs = series[0].xs;
   const xAt = (i) => pad.l + (xs.length <= 1 ? 0 : (i / (xs.length - 1)) * iw);
   const yAt = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
-  const grid = (o.gridVals || [0, 0.2, 0.5, 1]).map((v) => {
-    const dash = Math.abs(v - (o.markY == null ? 0.2 : o.markY)) < 1e-9;
-    return `<line x1="${pad.l}" y1="${yAt(v)}" x2="${w - pad.r}" y2="${yAt(v)}" stroke="${dash ? "#c99a2e" : "#e6edf5"}" ${dash ? 'stroke-dasharray="4 3"' : ""}/>
-      <text x="${pad.l - 8}" y="${yAt(v) + 4}" text-anchor="end" font-size="12" fill="${dash ? "#8d5b00" : "#6b7280"}">${v.toFixed(1)}</text>`;
+  const grid = (opt.gridVals || [0, 0.2, 0.5, 1]).map((v) => {
+    const dashed = Math.abs(v - (opt.markY == null ? 0.2 : opt.markY)) < 1e-9;
+    return `<line x1="${pad.l}" y1="${yAt(v).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(v).toFixed(1)}" stroke="${dashed ? cv("--orange", "#ad643c") : cv("--line", "#dfe5ed")}" ${dashed ? 'stroke-dasharray="4 4"' : ""}/>
+      <text x="${pad.l - 8}" y="${(yAt(v) + 4).toFixed(1)}" text-anchor="end" font-size="12" fill="${dashed ? cv("--orange", "#ad643c") : cv("--muted", "#617184")}">${v.toFixed(1)}</text>`;
   }).join("");
-  const tickY = o.xLabel ? h - 26 : h - 8;
-  const labels = xs.map((v, i) => `<text x="${xAt(i)}" y="${tickY}" text-anchor="middle" font-size="12" fill="#6b7280">${esc(v)}</text>`).join("");
-  const xTitle = o.xLabel
-    ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="13" fill="#4b5563">${esc(o.xLabel)}</text>`
-    : "";
-  const yTitle = o.yLabel
-    ? `<text x="16" y="${pad.t + ih / 2}" text-anchor="middle" font-size="13" fill="#4b5563" transform="rotate(-90 16 ${pad.t + ih / 2})">${esc(o.yLabel)}</text>`
-    : "";
+  const labels = xs.map((v, i) => `<text x="${xAt(i).toFixed(1)}" y="${h - (opt.xLabel ? 26 : 8)}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}">${esc(v)}</text>`).join("");
+  const xTitle = opt.xLabel ? `<text x="${pad.l + iw / 2}" y="${h - 6}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}">${esc(opt.xLabel)}</text>` : "";
+  const yTitle = opt.yLabel ? `<text x="14" y="${(pad.t + ih / 2).toFixed(1)}" text-anchor="middle" font-size="12" fill="${cv("--muted", "#617184")}" transform="rotate(-90 14 ${(pad.t + ih / 2).toFixed(1)})">${esc(opt.yLabel)}</text>` : "";
   const paths = series.map((s) => {
     let d = "", pen = false;
     s.ys.forEach((v, i) => {
@@ -1330,848 +1356,604 @@ function lineChart(series, opts) {
     return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
   }).join("");
   const legend = `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`;
-  const aria = esc(o.label || "折线图");
-  if (!o.interactive) {
-    return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${aria}">${grid}${labels}${xTitle}${yTitle}${paths}</svg>${legend}</div>`;
-  }
-  const meta = {
-    w, h, pad, xs, yMin, yMax,
-    series: series.map((s) => ({ name: s.name, color: s.color, ys: s.ys })),
-  };
-  const hv = `<g class="hv" style="opacity:0">
-      <line class="hv-line" x1="0" y1="${pad.t}" x2="0" y2="${h - pad.b}" stroke="#94a3b8" stroke-dasharray="3 3"/>
-      ${series.map((s, k) => `<circle class="hv-dot" data-k="${k}" r="4.5" fill="${s.color}" stroke="#fff" stroke-width="2"/>`).join("")}
-    </g>`;
-  return `<div class="chart-wrap chart-interactive">
-    <svg class="chart" viewBox="0 0 ${w} ${h}" data-meta="${esc(JSON.stringify(meta))}" role="img" aria-label="${aria}">${grid}${labels}${xTitle}${yTitle}${paths}${hv}</svg>
-    <div class="chart-tip" hidden></div>
-    ${legend}
-  </div>`;
+  return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opt.label || "折线图")}">${grid}${labels}${xTitle}${yTitle}${paths}</svg>${legend}</div>`;
 }
 
 function scatterChart(xs, ys, color, xName, yName) {
-  const w = 320, h = 250;
-  const pad = { l: 40, r: 12, t: 12, b: 36 };
+  const w = 300, h = 220;
+  const pad = { l: 36, r: 10, t: 10, b: 32 };
   const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
   const zx = zscore(xs), zy = zscore(ys);
   const xAt = (v) => pad.l + ((Math.max(-3, Math.min(3, v)) + 3) / 6) * iw;
   const yAt = (v) => pad.t + (1 - (Math.max(-3, Math.min(3, v)) + 3) / 6) * ih;
   const dots = [];
-  for (let i = 0; i < zx.length; i++) {
-    dots.push(`<circle cx="${xAt(zx[i]).toFixed(1)}" cy="${yAt(zy[i]).toFixed(1)}" r="2" fill="${color}" opacity="0.4"/>`);
-  }
-  const axis = `<line x1="${pad.l}" y1="${yAt(0)}" x2="${w - pad.r}" y2="${yAt(0)}" stroke="#e6edf5"/>
-    <line x1="${xAt(0)}" y1="${pad.t}" x2="${xAt(0)}" y2="${h - pad.b}" stroke="#e6edf5"/>
-    <text x="${(pad.l + w - pad.r) / 2}" y="${h - 6}" text-anchor="middle" font-size="12" fill="#334155">${esc(xName)}</text>
-    <text x="12" y="${(pad.t + h - pad.b) / 2}" text-anchor="middle" font-size="12" fill="#334155" transform="rotate(-90 12 ${(pad.t + h - pad.b) / 2})">${esc(yName)}</text>`;
+  for (let i = 0; i < zx.length; i++) dots.push(`<circle cx="${xAt(zx[i]).toFixed(1)}" cy="${yAt(zy[i]).toFixed(1)}" r="1.8" fill="${color}" opacity="0.45"/>`);
+  const axis = `<line x1="${pad.l}" y1="${yAt(0).toFixed(1)}" x2="${w - pad.r}" y2="${yAt(0).toFixed(1)}" stroke="${cv("--line", "#dfe5ed")}"/>
+    <line x1="${xAt(0).toFixed(1)}" y1="${pad.t}" x2="${xAt(0).toFixed(1)}" y2="${h - pad.b}" stroke="${cv("--line", "#dfe5ed")}"/>
+    <text x="${(pad.l + w - pad.r) / 2}" y="${h - 8}" text-anchor="middle" font-size="11.5" fill="${cv("--muted", "#617184")}">${esc(xName)}</text>
+    <text x="12" y="${(pad.t + h - pad.b) / 2}" text-anchor="middle" font-size="11.5" fill="${cv("--muted", "#617184")}" transform="rotate(-90 12 ${(pad.t + h - pad.b) / 2})">${esc(yName)}</text>`;
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="散点">${axis}${dots.join("")}</svg>`;
 }
+
 function zscore(a) {
   const m = mean(a);
   const s = sd(a) || 1;
   return a.map((v) => (v - m) / s);
 }
 
+/* 横向条形：用于熵预算 */
+function barRows(items) {
+  const max = Math.max.apply(null, items.map((x) => Math.abs(x.value) || 0).concat([1]));
+  return `<div class="bar-rows">${items.map((x) => {
+    const pct = Math.max(1, Math.round((Math.abs(x.value) / max) * 100));
+    return `<div class="bar-row">
+      <span class="bar-k">${x.label}</span>
+      <span class="bar-track"><i class="${x.tone || ""}" style="width:${pct}%"></i></span>
+      <b class="bar-v ${x.tone || ""}">${x.text}</b>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 /* ============================================================
-   9. 页面：场景与模型
+   10. 总览
+   ============================================================ */
+
+function sceneSvg() {
+  const blue = "var(--blue)", orange = "var(--orange)", green = "var(--green)";
+  const buildings = [[60, 90, 90, 110], [180, 120, 70, 80], [700, 110, 80, 90], [880, 80, 100, 120]];
+  const windows = buildings.map(([x, y, w, h]) => {
+    let out = "";
+    for (let r = y + 10; r < y + h - 8; r += 16) {
+      for (let c = x + 10; c < x + w - 10; c += 16) out += `<rect class="window" x="${c}" y="${r}" width="7" height="9" rx="1"/>`;
+    }
+    return out;
+  }).join("");
+  const ris = state.risOn
+    ? `<g class="ris-group"><line class="path-ris" x1="250" y1="180" x2="550" y2="96" stroke="${green}" stroke-width="1.5" fill="none"/>
+       <line class="path-ris" x1="550" y1="96" x2="850" y2="180" stroke="${green}" stroke-width="1.5" fill="none"/>
+       <rect class="ris-box" x="530" y="76" width="40" height="40" rx="3" stroke-width="1.5"/>
+       <rect class="ris-cell" x="535" y="81" width="6" height="6"/><rect class="ris-cell" x="546" y="81" width="6" height="6"/><rect class="ris-cell" x="557" y="81" width="6" height="6"/>
+       <rect class="ris-cell" x="535" y="92" width="6" height="6"/><rect class="ris-cell" x="546" y="92" width="6" height="6"/><rect class="ris-cell" x="557" y="92" width="6" height="6"/>
+       <rect class="ris-cell" x="535" y="103" width="6" height="6"/><rect class="ris-cell" x="546" y="103" width="6" height="6"/><rect class="ris-cell" x="557" y="103" width="6" height="6"/>
+       <text x="550" y="70" text-anchor="middle" class="label" font-size="12">RIS</text></g>`
+    : "";
+  const jam = state.jamOn
+    ? `<g class="jam-group"><circle cx="470" cy="214" r="6" class="jam"/><path d="M470 208l-6-10M470 208l6-10" stroke="${orange}" stroke-width="1.5" fill="none"/>
+       <text x="470" y="240" text-anchor="middle" class="label" font-size="12">干扰源</text></g>`
+    : "";
+  return `<svg viewBox="0 0 1100 300" role="img" aria-label="城市环境中 Alice 与 Bob 通信，Eve 被动窃听，可选 RIS 反射与干扰源">
+    <rect x="0" y="0" width="1100" height="300" fill="var(--base)"/>
+    ${buildings.map((b) => `<rect class="building" x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="2"/>`).join("")}
+    ${windows}
+    <g>
+      <rect class="road" x="0" y="196" width="1100" height="52"/>
+      <line class="dash" x1="0" y1="222" x2="1100" y2="222"/>
+      <rect class="car" x="470" y="206" width="34" height="14" rx="3"/>
+      <circle cx="480" cy="222" r="4" fill="var(--base)"/><circle cx="496" cy="222" r="4" fill="var(--base)"/>
+    </g>
+    <g>
+      <rect x="150" y="168" width="4" height="26" fill="var(--green)" opacity="0.5"/><circle cx="152" cy="164" r="10" class="tree"/>
+      <rect x="610" y="168" width="4" height="26" fill="var(--green)" opacity="0.5"/><circle cx="612" cy="164" r="10" class="tree"/>
+      <rect x="980" y="160" width="4" height="30" fill="var(--green)" opacity="0.5"/><circle cx="982" cy="155" r="12" class="tree"/>
+    </g>
+    <circle cx="250" cy="180" r="12" class="node-legal" stroke-width="2"/>
+    <path d="M250 174v6M244 177h12M250 192v4M246 196h8" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
+    <text x="250" y="158" text-anchor="middle" class="label">Alice</text>
+    <text x="250" y="212" text-anchor="middle" class="bits">101100</text>
+    <circle cx="850" cy="180" r="12" class="node-legal" stroke-width="2"/>
+    <path d="M850 174v6M844 177h12M850 192v4M846 196h8" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
+    <text x="850" y="158" text-anchor="middle" class="label">Bob</text>
+    <text x="850" y="212" text-anchor="middle" class="bits">101100</text>
+    <line class="path-legal" x1="262" y1="180" x2="838" y2="180" stroke="${blue}" stroke-width="2" fill="none"/>
+    <circle cx="560" cy="252" r="12" class="node-eve" stroke-width="2"/>
+    <path d="M560 246v6M554 249h12M560 264v4M556 268h8" stroke="var(--orange)" stroke-width="1.5" fill="none"/>
+    <text x="560" y="234" text-anchor="middle" class="label">Eve</text>
+    <text x="560" y="284" text-anchor="middle" class="bits">011010</text>
+    <line class="path-eve" x1="262" y1="186" x2="548" y2="248" stroke="${orange}" stroke-width="1.5" fill="none"/>
+    <line class="path-eve" x1="838" y1="186" x2="572" y2="248" stroke="${orange}" stroke-width="1.5" fill="none"/>
+    ${ris}
+    ${jam}
+  </svg>`;
+}
+
+function pageHome() {
+  const has = hasAny();
+  const p = premise();
+  const d = hasKeys() ? digital() : null;
+  const dataLine = state.synthetic
+    ? `数据：合成演示（1 组，1800 秒）`
+    : (has ? `数据：当前会话（1 组，${session().align ? session().align.span + " 秒" : "—"}）` : "数据：未导入");
+  return `
+  <div class="page-head">
+    <h2>评估原理</h2>
+    <button class="btn primary" data-jump="input">新建评估</button>
+  </div>
+
+  <div class="scene ${state.playing ? "" : "is-paused"}" id="scene">
+    <div class="scene-bar">
+      <label><input type="checkbox" data-act="ris" ${state.risOn ? "checked" : ""}/> RIS</label>
+      <label><input type="checkbox" data-act="jam" ${state.jamOn ? "checked" : ""}/> 干扰源</label>
+      <button class="btn" data-act="play">${state.playing ? "暂停" : "继续"}</button>
+    </div>
+    ${sceneSvg()}
+  </div>
+  <p class="meta" style="margin-top:8px">${dataLine} · 拓扑为概念示意，不表示真实传播仿真</p>
+
+  ${card("物理层密钥生成流程", `<div class="generation-grid">
+    <div class="generation-step">${ico("tower")}<div class="step-label">互易信道探测</div><div class="step-output">探测信号</div></div>
+    <div class="generation-step">${ico("wave")}<div class="step-label">信道观测</div><div class="step-output mini-wave"><span style="height:8px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div></div>
+    <div class="generation-step">${ico("binary")}<div class="step-label">量化</div><div class="step-output"><code>10110010</code></div></div>
+    <div class="generation-step">${ico("merge")}<div class="step-label">信息调和</div><div class="step-output">一致密钥</div></div>
+    <div class="generation-step">${ico("key")}<div class="step-label">隐私放大</div><div class="step-output">最终密钥</div></div>
+  </div>`)}
+
+  ${card("物理层密钥安全性评估位置", `
+    <div class="assessment">
+      <div class="assessment-title">模拟域</div>
+      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">三方信道特征</span></div>
+      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">时序依赖 · 样本规模</span></div>
+      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("I(X^{L};Y^{L}\\mid Z^{L})/L")}</span></div>
+      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">源信息量参考</span></div>
+    </div>
+    <div class="assessment">
+      <div class="assessment-title">数字域</div>
+      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">原始比特 · Eve 侧信息</span></div>
+      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">块依赖 · 概率支持</span></div>
+      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("H_{\\min}(K\\mid E)")}</span></div>
+      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">秘密熵下界</span></div>
+    </div>
+    <div class="assessment">
+      <div class="assessment-title">最终密钥</div>
+      <div class="assessment-cell"><span class="cell-head">输入</span><span class="cell-value">调和记录 · 放大参数</span></div>
+      <div class="assessment-cell"><span class="cell-head">适用性检查</span><span class="cell-value">熵下界 · 泄露记录</span></div>
+      <div class="assessment-cell"><span class="cell-head">评估方法</span><span class="cell-value math">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span></div>
+      <div class="assessment-cell"><span class="cell-head">输出</span><span class="cell-value">安全长度 · 净速率</span></div>
+    </div>
+    <details><summary>指标说明</summary>
+      <p>X、Y、Z 分别为 Alice、Bob、Eve 的信道特征；源信息量为模型下的上界参考，不等于实际密钥速率。
+      最终长度依赖已验证的整段条件最小熵下界，扣除公开泄露 λ 与隐私放大余量 Δ。</p>
+    </details>`)}
+
+  ${card("当前评估状态", `<div class="stats">
+    ${stat("评估前提", esc(p.label), `${state.attack} · 信道${state.channel}`, p.tone === "ok" ? "ok" : p.tone === "bad" ? "bad" : "mute")}
+    ${stat("模拟域结论", analogConclusion() ? esc(analogConclusion().short) : "—", "信道信息量", analogConclusion() ? analogConclusion().tone : "mute")}
+    ${stat("数字域结论", digitalConclusion() ? esc(digitalConclusion().short) : "—", "密钥质量", digitalConclusion() ? digitalConclusion().tone : "mute")}
+    ${stat("密钥总长", d ? `${num(d.nBits)} <small>bit</small>` : "—", d ? `${num(d.lines)} 行 × ${d.width}` : "未导入", "mute")}
+  </div>
+  <p class="card-subnote">数据与参数在「评估设置」里导入和修改；两个域的定量结论在「分析结果」，汇总在「评估报告」。</p>`)}
+  `;
+}
+
+/* ============================================================
+   11. 评估设置
    ============================================================ */
 
 function fieldSelect(label, key, opts) {
-  return `<label class="field"><span>${label}</span>
-    <select data-field="${key}">${opts.map((o) => `<option value="${esc(o)}" ${state[key] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>
-  </label>`;
+  return `<label>${label}<select data-field="${key}">${opts.map((o) => `<option value="${esc(o)}" ${state[key] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
 }
 
-function pageScene() {
-  const p = premise();
+function fieldNumber(label, key, opt) {
+  return `<label>${label}<input type="number" data-field="${key}" value="${state[key]}" ${opt || ""}/></label>`;
+}
+
+function slotCard(slot) {
+  const v = state.slots[slot.id];
+  const ok = Boolean(v && v.ok);
+  const detail = ok
+    ? (slot.kind === "csi" ? `${num(v.rows)} 行 · ${v.secs.length} 秒` : `${num(v.lines.length)} 行 · ${num(v.bits)} bit`)
+    : (v && !v.ok ? (v.error || "解析失败") : "未载入");
+  const icon = slot.party === "ue" ? "phone" : slot.party === "nb" ? "radio" : "eye";
+  return `<div class="file ${ok ? "ok" : ""}">
+    <div class="file-top">
+      <span class="file-party">${ico(icon, 14)}${slot.party === "ue" ? "Alice" : slot.party === "nb" ? "Bob" : "Eve"} · ${slot.kind === "csi" ? "信道" : "密钥"}</span>
+      ${ok ? `<span class="file-state ok">已解析</span>` : v && !v.ok ? `<span class="file-state err">解析失败</span>` : `<span class="file-state">待载入</span>`}
+    </div>
+    <div class="file-name">${ok ? esc(v.name) : "—"}</div>
+    <div class="file-meta">${esc(detail)}</div>
+    <button class="btn file-btn" data-act="pick" data-slot="${slot.id}">${ok ? "替换文件" : "选择文件"}</button>
+  </div>`;
+}
+
+function analogChecks() {
+  const A = session().align;
+  if (!A) return [];
+  const st = stationarity(A.series.ue);
+  const blocks = blockCandidates();
+  const rec = recommendedBlock();
+  const probe = rec ? rec.L : 4;
+  const rho = acfAt(A.common, A.series.ue, probe);
+  const cover = rho == null ? "样本不足" : rho <= 0.2 ? "较完整" : rho <= 0.4 ? "部分" : "不足";
+  return [
+    { k: "数据完整性", rule: "缺口 < 10%", actual: pct(A.gap), verdict: A.gap < 0.1 ? "通过" : "缺口偏大", tone: A.gap < 0.1 ? "ok" : "warn", why: "三方同一秒都有数据的比例；缺口太大会让按块切分出现空块。" },
+    { k: "时间对齐", rule: "重叠 ≥ 50%", actual: pct(A.ratio), verdict: A.ratio >= 0.5 ? "通过" : "部分对齐", tone: A.ratio >= 0.5 ? "ok" : "warn", why: "以记录最少的一方为分母，衡量三方共同时段占比。" },
+    { k: "时间相关性", rule: `ρ(${probe}s) ≤ 0.2`, actual: fx(rho, 3), verdict: cover === "较完整" ? "通过" : cover, tone: cover === "较完整" ? "ok" : "warn", why: "块间是否近似独立；只低是不够的，还要能凑够块数。" },
+    { k: "平稳性", rule: "Δμ<1σ 且 F<2", actual: st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", verdict: st ? st.level : "未知", tone: st ? st.tone : "warn", why: "分四段比较均值漂移与方差比；CSI 慢漂移会让不同时段的块均值失去可比性。" },
+    { k: "样本充分性", rule: "n ≥ 30", actual: `${blocks[0].n} 块`, verdict: blocks[0].n >= MIN_BLOCKS ? "通过" : "不足", tone: blocks[0].n >= MIN_BLOCKS ? "ok" : "bad", why: "三变量偏相关需要至少 30 个独立样本。" },
+    { k: "计算可行性", rule: "闭式解", actual: "3 变量", verdict: "可计算", tone: "ok", why: "联合高斯下条件互信息有闭式解，不需要迭代。" },
+  ];
+}
+
+function digitalChecks() {
+  const d = digital();
+  if (!d) return [];
+  const g8 = d.groups[8];
+  return [
+    { k: "密钥装载", rule: "十六进制 · 偶长度", actual: `${num(d.lines)} 行 × ${d.width}`, verdict: "通过", tone: "ok", why: "每两个十六进制字符是一个字节，行只是存储切分。" },
+    { k: "合法方 KDR", rule: "= 0", actual: pct(d.kdr, 2), verdict: d.same ? "通过" : "硬失败", tone: d.same ? "ok" : "bad", why: "隐私放大后两端必须逐位相同，非零即流程失败。" },
+    { k: "统计识别性", rule: "样本/状态 ≥ 10", actual: fx(g8.ratio, 1), verdict: g8.marginalOk ? "可估" : "不足", tone: g8.marginalOk ? "ok" : "warn", why: "分组直方图是否被样本撑满；空格子会让最小熵虚高。" },
+    { k: "条件最小熵", rule: "需放大前比特", actual: "不可估计", verdict: "未证明", tone: "warn", why: "H_min(K|E) 需要隐私放大前的量化比特与 Eve 同期观测，当前数据没有。" },
+  ];
+}
+
+function checkTable(items) {
+  if (!items.length) return emptyBox("还没有可检查的数据", "<p>先在下方导入三方信道与密钥。</p>");
+  return `<table class="data"><thead><tr><th>检查项</th><th>判据</th><th class="num">实测</th><th class="num">判定</th></tr></thead><tbody>
+    ${items.map((it) => {
+      const open = state.checkOpen === it.k;
+      const row = `<tr class="clickable" data-act="check" data-check="${esc(it.k)}">
+        <td><b style="font-weight:600">${it.k}</b></td>
+        <td class="meta">${it.rule}</td>
+        <td class="num">${it.actual}</td>
+        <td class="num">${tag(it.verdict, it.tone)}</td></tr>`;
+      return open ? row + `<tr class="note-row"><td colspan="4">${it.why}</td></tr>` : row;
+    }).join("")}
+  </tbody></table>`;
+}
+
+function pageInput() {
+  const A = hasAnalog() ? session().align : null;
+  const d = hasKeys() ? digital() : null;
+  const b = budget();
+  const summary = [
+    stat("三方重叠时长", A ? `${num(A.common.length)} <small>秒</small>` : "—", A ? `占采集 ${pct(A.ratio)}` : "未导入", "mute"),
+    stat("采集时长", A ? `${num(A.span)} <small>秒</small>` : "—", A ? `${pct(A.gap)} 无同时数据` : "—", "mute"),
+    stat("密钥长度", d ? `${num(d.nBits)} <small>bit</small>` : "—", d ? `${num(d.lines)} 行 × ${d.width}` : "未导入", "mute"),
+    stat("合法方 KDR", d ? pct(d.kdr, 2) : "—", d && d.same ? "完全一致" : "未比对", d ? (d.same ? "ok" : "bad") : "mute"),
+  ].join("");
+
+  const obs = A ? (() => {
+    const n = Math.min(60, A.common.length);
+    const idx = [];
+    for (let i = 0; i < A.common.length; i += Math.max(1, Math.floor(A.common.length / n))) idx.push(i);
+    const series = A.present.map((p) => ({
+      name: PARTY_LABEL[p], color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
+      xs: idx.map((i) => i), ys: idx.map((i) => A.series[p][i]),
+    }));
+    return lineChart(series, { label: "观测预览", yMin: Math.min.apply(null, series.map((s) => Math.min.apply(null, s.ys))), yMax: Math.max.apply(null, series.map((s) => Math.max.apply(null, s.ys))), xLabel: "秒", yLabel: "特征值", gridVals: [] });
+  })() : "";
+
   return `
-  ${premiseBlock(p)}
-  ${card("评估范围", `<div class="grid-3 form-grid">
+  <div class="page-head">
+    <h2>评估设置</h2>
+    <button class="btn primary" data-jump="results">查看分析</button>
+  </div>
+
+  ${card("场景与攻击", `<div class="form">
     ${fieldSelect("环境", "env", ["室内", "室外", "车载"])}
     ${fieldSelect("移动状态", "motion", ["静止", "低速", "高速"])}
     ${fieldSelect("可重构智能表面（RIS）", "ris", ["无", "有"])}
     ${fieldSelect("攻击模型", "attack", ["被动窃听", "主动攻击"])}
     ${fieldSelect("协商信道", "channel", ["已认证", "未认证"])}
-    <label class="field"><span>特征</span>
-      <div class="field-pair">
-        <select data-field="feature">${["CSI", "RSSI"].map((o) => `<option value="${o}" ${state.feature === o ? "selected" : ""}>${o}</option>`).join("")}</select>
-        ${state.feature === "CSI" ? `<select data-field="csiUse">${["幅度", "相位", "复数值"].map((o) => `<option value="${o}" ${state.csiUse === o ? "selected" : ""}>${o}</option>`).join("")}</select>` : ""}
-      </div>
-    </label>
-  </div>`)}
-
-  ${card("Eve 能力", `<div class="checkline-row">
-    <div class="checkline"><input type="checkbox" data-field="eveObs" ${state.eveObs ? "checked" : ""}/> 掌握信道观测</div>
-    <div class="checkline"><input type="checkbox" data-field="eveQuant" ${state.eveQuant ? "checked" : ""}/> 知道公开量化规则</div>
-    <div class="checkline"><input type="checkbox" data-field="eveOther" ${state.eveOther ? "checked" : ""}/> 掌握其他侧信息</div>
-  </div>`)}
-
-  <div class="note-block danger page-note">
-    <h4>能力边界</h4>
-    <ul>
-      <li>第一版只覆盖<strong>被动窃听 + 已认证公开信道</strong>。改动上面两项会立即把两个域的结论降为「前提不成立」。</li>
-      <li>「室内」「有 RIS」这类标签只用于记录场景；<strong>是否启用某个安全公式，由攻击能力、统计假设、协议条件决定</strong>，不由标签决定。</li>
-      <li>结论<strong>分模拟域与数字域各自给出</strong>：模拟域回答「信道里有多少可用的秘密信息」，数字域回答「提取出的密钥是否合格」。两者都不足以单独证明保密强度，因此本工作台<strong>不给出合并的安全等级</strong>。</li>
-    </ul>
+    <label>特征<div class="field-pair">
+      <select data-field="feature">${["CSI", "RSSI"].map((o) => `<option value="${o}" ${state.feature === o ? "selected" : ""}>${o}</option>`).join("")}</select>
+      ${state.feature === "CSI" ? `<select data-field="csiUse">${["幅度", "相位", "复数值"].map((o) => `<option value="${o}" ${state.csiUse === o ? "selected" : ""}>${o}</option>`).join("")}</select>` : ""}
+    </div></label>
   </div>
+  <p class="card-subnote">攻击模型与协商信道直接参与判定；环境、移动状态、RIS 只记录场景、用于报告标明适用范围。</p>`)}
+
+  ${card("数据", `
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn primary" data-act="pick-dir">${ico("folder", 14)} 选择会话文件夹</button>
+      ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入真实示例</button>`}
+      <button class="btn" data-act="load-synth">载入合成演示</button>
+      <button class="btn ghost" data-act="clear">清空</button>
+    </div>
+    ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 12px">本站为公开演示版，<b>未附带实测采集数据</b>。可用「载入合成演示」体验完整流程，或上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>` : ""}
+    <div class="files">${SLOTS.map(slotCard).join("")}</div>
+    <div class="divider"></div>
+    <div class="stats">${summary}</div>`)}
+
+  ${card("前置检查", `
+    <div class="charts">
+      <div class="plot"><h3>模拟域</h3>${checkTable(analogChecks())}</div>
+      <div class="plot"><h3>数字域</h3>${checkTable(digitalChecks())}</div>
+    </div>
+    <p class="card-subnote">未导入数据时显示为空；检查项不通过不会阻止计算，但会让对应结论降级。</p>`, tag(hasAny() ? "已检查" : "未检查", hasAny() ? "info" : ""))}
+
+  ${card("分析参数", `<div class="form">
+    ${fieldNumber(`模拟域块长 L（秒）`, "L", 'min="1" step="1"')}
+    ${fieldNumber("原始保留比特 n", "pN", 'min="1" step="1024"')}
+    ${fieldNumber("码率 r", "pRate", 'min="0.05" max="0.99" step="0.01"')}
+    ${fieldNumber(`假设的调和前熵 H̄_min（bit）`, "pHmin", 'min="0" step="1024"')}
+    ${fieldNumber("其他公开信息（bit）", "pOther", 'min="0" step="64"')}
+    ${fieldNumber(`隐私放大余量 Δ_PA（bit）`, "pPa", 'min="0" step="64"')}
+    ${fieldNumber("认证预共享位数（bit）", "pAuthBits", 'min="0" step="32"')}
+    ${fieldNumber("处理时长（秒）", "pSeconds", 'min="1" step="1"')}
+    ${fieldNumber("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
+  </div>
+  <p class="card-subnote">改任一格，熵预算与报告立即重算；建议提取长度 ℓ_safe 当前为 <b>${num(b.safe)} bit</b>（假设输入）。</p>`)}
+
+  ${A ? card("观测预览", `${obs}<p class="card-subnote">取对齐后的前 60 个秒级样本，仅用于确认三方是否同步、量级是否可比。</p>`) : ""}
   `;
 }
 
-function premiseBlock(p) {
-  return `<div class="grade ${p.tone}">
-    <div class="g-label">评估前提</div>
-    <div class="g-value">${esc(p.label)}</div>
-    <p class="g-note">${esc(p.note)}</p>
-  </div>`;
-}
+/* ============================================================
+   12. 分析结果
+   ============================================================ */
 
-/* 安全性结论：判定 → 定量依据表 → 边界 / 缺口 */
-function secConclusion(c, sub) {
-  const body = c.rows.map((r) => `<tr>
-      <td class="sc-k">${esc(r.k)}</td>
-      <td class="num sc-v">${r.v}</td>
-      <td class="sc-rule">${esc(r.rule)}</td>
-      <td class="sc-v">${chip(r.verdict, r.tone)}</td>
-    </tr>`).join("");
+function conclusionBlock(c, sub) {
+  if (!c) return "";
   return `<div class="concl ${c.tone}">
-      <div class="concl-head">
-        <span class="concl-tag">${esc(c.label)}</span>
-        <span class="concl-sub">${esc(sub)}</span>
-      </div>
-      <p class="concl-text">${esc(c.text)}</p>
-    </div>
-    <table class="compact concl-table">
-      <thead><tr><th>安全指标</th><th class="num">实测</th><th>判据</th><th class="sc-v">判定</th></tr></thead>
-      <tbody>${body}</tbody>
-    </table>
-    ${c.note ? `<p class="concl-note">${esc(c.note)}</p>` : ""}`;
-}
-
-/* ============================================================
-   10. 页面：数据导入
-   ============================================================ */
-
-function slotCard(slot) {
-  const v = state.slots[slot.id];
-  const ok = Boolean(v && v.ok);
-  let detail = "等待载入";
-  if (ok && slot.kind === "csi") detail = `${num(v.rows)} 行 · ${v.secs.length} 秒`;
-  if (ok && slot.kind === "key") detail = `${num(v.lines.length)} 行 · ${num(v.bits)} bit`;
-  if (v && !v.ok) detail = v.error || "解析失败";
-  return `<div class="slot" data-party="${slot.party}" data-ok="${ok ? 1 : 0}">
-    <div class="slot-top">
-      <div class="slot-name">${slot.title}</div>
-      <span class="slot-tag">${slot.hint}</span>
-    </div>
-    <div class="slot-file">${ok ? esc(v.name) : "未载入"}</div>
-    <div class="slot-meta">${esc(detail)}</div>
-    <div class="slot-foot">
-      ${ok ? `<span class="slot-ok">✓ 已解析</span>` : `<span></span>`}
-      <button class="btn ghost slot-btn" data-act="pick" data-slot="${slot.id}">${ok ? "替换" : "选择文件"}</button>
-    </div>
+    <div class="concl-head"><span class="concl-tag">${esc(c.label)}</span><span class="meta">${esc(sub || "")}</span></div>
+    <p class="concl-text">${esc(c.text)}</p>
+    ${c.note ? `<p class="concl-note">${esc(c.note)}</p>` : ""}
   </div>`;
 }
 
-function pageImport() {
-  const s = session();
-  const A = s.align;
-  const d = hasKeys() ? digital() : null;
-  const summary = [];
-  if (A) {
-    summary.push(fig("三方重叠时长", `${A.common.length} <small>秒</small>`, `占采集时长 ${pct(A.ratio)}`, A.ratio >= 0.5 ? "ok" : "warn"));
-    summary.push(fig("采集时长", `${A.span} <small>秒</small>`, `其中 ${pct(A.gap)} 无同时数据`, "mute"));
-  } else {
-    summary.push(fig("三方重叠时长", "—", "至少需要两方信道数据", "mute"));
-  }
-  if (d) {
-    summary.push(fig("密钥长度", `${num(d.nBits)} <small>bit</small>`, `${num(d.lines)} 行 × ${d.width} bit`, "mute"));
-    summary.push(fig("双方密钥", d.same ? "完全一致" : `${num(d.diff)} bit 不同`, d.same ? "隐私放大输出" : "流程异常", d.same ? "ok" : "bad"));
-  } else {
-    summary.push(fig("密钥长度", "—", "未载入", "mute"));
-  }
-
-  return `
-  <div class="page-head">
-    <p class="kicker">${kicker("import")}</p>
-    <h2>三方数据</h2>
-  </div>
-  ${card("数据来源", `<div class="btn-row">
-    <button class="btn primary" data-act="pick-dir">选择会话文件夹</button>
-    ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入真实示例</button>`}
-    <button class="btn" data-act="load-synth">载入合成演示</button>
-    <button class="btn ghost" data-act="clear">清空</button>
-  </div>
-  ${state.sampleAvailable === false
-    ? `<p class="card-subnote">本站是公开演示版，<strong>未附带实测采集数据</strong>。可以直接点「载入合成演示」体验完整流程，也可以上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>`
-    : ""}`)}
-
-  <div class="grid-3">
-    ${["ue", "nb", "eve"].map((p) => {
-      const csi = SLOTS.find((x) => x.party === p && x.kind === "csi");
-      const key = SLOTS.find((x) => x.party === p && x.kind === "key");
-      return `<div>${slotCard(csi)}<div style="height:10px"></div>${slotCard(key)}</div>`;
-    }).join("")}
-  </div>
-
-  ${card("会话摘要", `<div class="figures">${summary.join("")}</div>`)}
-
-  ${hasAny() ? fitSection() : ""}
-  `;
-}
-
-/* ============================================================
-   11. 适用性检查（并入数据导入页）
-   ============================================================ */
-
-function fitSection() {
-  return `
-  <div class="sec-head" id="fit-section">
-    <h2>适用性检查</h2>
-    <span class="fit-hint">两域各自独立判定</span>
-  </div>
-  ${analogFit()}
-  ${digitalFit()}
-  `;
-}
-
-function analogFit() {
-  if (!hasAnalog()) {
-    return card("模拟域检查", `<div class="empty"><h3>还缺信道数据</h3>
-      <p>至少需要 UE 与基站两方 CSV 才能做模拟域检查。</p></div>`, chip("待导入", "warn"));
-  }
-  const s = session();
-  const A = s.align;
-  const st = stationarity(A.series.ue);
-  const blocks = blockCandidates();
-  const rec = recommendedBlock();
-  const recL = rec ? rec.L : null;
-  const probeL = recL || 4;
-  const rhoProbe = acfAt(A.common, A.series.ue, probeL);
-  const cover = rhoProbe == null ? "样本不足" : rhoProbe <= 0.2 ? "较完整" : rhoProbe <= 0.4 ? "部分" : "不足";
-
-  const items = [
-    {
-      id: "integrity", idx: 1, name: "数据完整性",
-      rule: "缺口 < 10%",
-      actual: pct(A.gap),
-      verdict: A.gap < 0.1 ? "通过" : A.gap < 0.25 ? "可接受" : "缺口偏大",
-      tone: A.gap < 0.1 ? "ok" : "warn",
-      formula: "\\text{gap}=1-\\frac{|\\mathcal{T}_{\\text{common}}|}{\\max\\mathcal{T}-\\min\\mathcal{T}+1}",
-      explain: "整段采集时间里，有多少整秒是三方都同时采到数据的。缺口来自丢包、采集启停不同步或设备离线；缺口越大，按块切分时出现的空块越多，后续统计的有效样本就越少。",
-    },
-    {
-      id: "align", idx: 2, name: "时间对齐",
-      rule: "重叠比例 ≥ 50%",
-      actual: pct(A.ratio),
-      verdict: A.ratio >= 0.5 ? "通过" : A.ratio >= 0.1 ? "部分对齐" : "无法对齐",
-      tone: A.ratio >= 0.5 ? "ok" : A.ratio >= 0.1 ? "warn" : "bad",
-      formula: "\\rho_{\\text{align}}=\\frac{|\\mathcal{T}_{\\text{common}}|}{\\min_i|\\mathcal{T}_i|}",
-      explain: "分母取三方中记录最少的一方，避免比例被最长的那一路稀释。低于 50% 说明三方几乎没有共同时段，模拟域的任何统计都失去意义；低于 10% 直接拒绝分析。",
-    },
-    {
-      id: "acf", idx: 3, name: "时间相关性",
-      rule: `${tex(`\\rho(${probeL}\\,\\mathrm{s})\\le 0.2`)}`,
-      actual: fx(rhoProbe, 3),
-      verdict: cover === "较完整" ? "通过" : cover === "部分" ? "部分" : "不足",
-      tone: cover === "较完整" ? "ok" : "warn",
-      formula: "\\rho(\\tau)=\\frac{\\sum_t (x_t-\\bar x)(x_{t+\\tau}-\\bar x)}{\\sum_t (x_t-\\bar x)^2}",
-      explain: `块长 ${tex("L")} 秒意味着把连续 ${tex("L")} 秒当作一次独立观测。${tex("\\rho(\\tau)")} 衡量相隔 ${tex("\\tau")} 秒的两个样本还残留多少线性相关；若 ${tex("\\rho(L)")} 仍显著大于 0，块与块之间就没有真正独立。分档：${tex("\\le 0.2")} 依赖较完整，${tex("\\le 0.4")} 部分覆盖，${tex(">0.4")} 不足。自相关低只是必要诊断，<strong>不能证明独立</strong>。`,
-    },
-    {
-      id: "station", idx: 4, name: "平稳性",
-      rule: `${tex("\\Delta_\\mu<1\\sigma")} 且 ${tex("F<2")}`,
-      actual: st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—",
-      verdict: st ? st.level : "无法判断",
-      tone: st ? st.tone : "warn",
-      formula: "\\Delta_\\mu=\\frac{\\max_k \\mu_k-\\min_k \\mu_k}{\\sigma_{\\text{pool}}},\\qquad F=\\frac{\\max_k \\sigma_k^{2}}{\\min_k \\sigma_k^{2}}",
-      explain: `把序列等分成四段，逐段算均值 ${tex("\\mu_k")} 与标准差 ${tex("\\sigma_k")}。${tex("\\Delta_\\mu")} 用池化标准差归一化，衡量整体均值是否漂移；${tex("F")} 是各段方差的比值，衡量波动是否一致。CSI 幅度的慢漂移（AGC 调整、路径损耗变化、终端位移）会同时推高这两个量，使不同时段的块均值不再代表同一个统计分布。`,
-    },
-    {
-      id: "nblk", idx: 5, name: "样本充分性",
-      rule: `${tex("n_{\\text{blk}}\\ge 30")}`,
-      actual: `${blocks[0].n} 块`,
-      verdict: blocks[0].n >= MIN_BLOCKS ? "通过" : "不足",
-      tone: blocks[0].n >= MIN_BLOCKS ? "ok" : "bad",
-      formula: "n_{\\text{blk}}=\\left\\lfloor\\frac{T}{L}\\right\\rfloor\\ \\ge\\ 30",
-      explain: `三个变量的相关系数估计，经验上需要至少 30 个独立样本才能把置信区间压到可用宽度。块数由采集时长 ${tex("T")} 与块长 ${tex("L")} 决定，${tex("L")} 越大块数越少。块数不足时宁可显示“不给数值”，也不给一个看似精确的结果。`,
-    },
-    {
-      id: "cost", idx: 6, name: "计算可行性",
-      rule: "闭式解，无需迭代",
-      actual: "3 变量",
-      verdict: "可计算",
-      tone: "ok",
-      formula: "I(X;Y\\mid Z)=-\\tfrac{1}{2}\\ln\\!\\left(1-\\rho_{xy|z}^{2}\\right)",
-      explain: `在联合高斯假设下，条件互信息 ${tex("I(X;Y\\mid Z)")} 有闭式解，不需要迭代拟合或高维分箱，内存与耗时都可预测。代价是“块均值”会丢掉块内结构，方向上<strong>低估</strong>信息量。`,
-    },
-  ];
-
-  const verdict = recL
-    ? `<div class="verdict">
-        <div><b>建议块长：${recL} 秒</b></div>
-        <div><b>选择依据：</b>主要时间依赖得到覆盖（ρ(${recL}s)=${fx(rhoProbe, 3)}），样本支撑 ${blocks.find((b) => b.L === recL).n} 块，计算成本${blocks.find((b) => b.L === recL).cost}。</div>
-        <div><b>残余问题：</b>跨块依赖仍需纳入所用模型；平稳性判定为「${st ? st.level : "未知"}」。</div>
-      </div>`
-    : `<div class="verdict bad">
-        <div><b>当前数据无法支持可靠的高维直接估计。</b></div>
-        <div>建议增加独立采集批次，或选择并验证具有时间依赖的参数模型。</div>
-      </div>`;
-
-  return card("模拟域检查", `${checkTable(items)}${verdict}`,
-    `<span class="fit-hint">点击行查看公式与释义</span>${chip(`${A.present.length} 方`, "info")}`);
-}
-
-function digitalFit() {
-  if (!hasKeys()) {
-    return card("数字域检查", `<div class="empty"><h3>还缺密钥文件</h3>
-      <p>载入 TXT 密钥后自动校验。</p></div>`, chip("待导入", "warn"));
-  }
-  const d = digital();
-  const g8 = d.groups[8];
-
-  const items = [
-    {
-      id: "kload", idx: 1, name: "密钥装载",
-      rule: "十六进制 · 偶长度",
-      actual: `${num(d.lines)} 行 × ${d.width}`,
-      verdict: "通过", tone: "ok",
-      formula: "N_{\\text{bit}}=\\sum_i 4\\,\\ell_i",
-      explain: `每两个十六进制字符是一个字节，每个字符 ${tex("4")} bit。行只是存储切分，<strong>没有对齐语义</strong> —— 密钥是隐私放大输出，行号不承载时间信息。`,
-    },
-    {
-      id: "keq", idx: 2, name: "双方密钥一致",
-      rule: `${tex("\\mathrm{KDR}=0")}`,
-      actual: d.same ? "0 bit" : `${num(d.diff)} bit`,
-      verdict: d.same ? "通过" : "硬失败",
-      tone: d.same ? "ok" : "bad",
-      formula: "\\mathrm{KDR}=\\frac{1}{N}\\sum_{j=1}^{N}\\left(k_j^{A}\\oplus k_j^{B}\\right)=0",
-      explain: `${tex("\\mathrm{KDR}")} 是两串密钥逐位异或后 1 的占比。隐私放大后两端必须逐位相同，任何非零差异都说明信息调和失败或隐私放大实现有问题，属于不能容忍的硬失败，而不是可以放行的误差。`,
-    },
-    {
-      id: "ksrc", idx: 3, name: "来源判定",
-      rule: "逐字节相同",
-      actual: d.same ? "一致" : "不一致",
-      verdict: "已确认", tone: "ok",
-      formula: "K^{A}=K^{B}",
-      explain: `密钥生成分三步：先把信道特征量化成 0/1 比特；再用公开信息纠错，让两端比特完全一致（这一步叫信息调和）；最后把一致的长比特压缩成更短的一段，并使窃听者无法从公开信息反推出结果（这一步叫隐私放大）。两端完全一致只能说明三步都走完了，<strong>不能说明密钥有多安全</strong>。`,
-    },
-    {
-      id: "kstat", idx: 4, name: "统计识别性",
-      rule: `${tex("N_b/2^{b}\\ge 10")}`,
-      actual: `${fx(g8.ratio, 1)}（b=8）`,
-      verdict: g8.marginalOk ? "充分" : "不足",
-      tone: g8.marginalOk ? "ok" : "warn",
-      formula: "\\frac{N_b}{2^{b}}\\ \\ge\\ 10,\\qquad N_b=\\left\\lfloor\\frac{N_{\\text{bit}}}{b}\\right\\rfloor",
-      explain: `把比特按 ${tex("b")} 位分组后有 ${tex("2^b")} 个可能取值，要估计每个取值的概率，每个格子平均至少要有 10 个样本。低于这个数，直方图基本是空的，最大频次被严重低估，最小熵反而会算得偏高。`,
-    },
-    {
-      id: "kcond", idx: 5, name: "条件识别性",
-      rule: `${tex("N_b/2^{2b}\\ge 5")}`,
-      actual: "需放大前数据",
-      verdict: "不适用", tone: "warn",
-      formula: "\\frac{N_b}{2^{2b}}\\ \\ge\\ 5",
-      explain: `要算 Eve 已知时的条件最小熵，需要 ${tex("(K,E)")} 的联合分布，状态空间是 ${tex("2^{2b}")}：${tex("b=8")} 时就有 65,536 个格子，每格平均要有 5 个样本才能估计 ${tex("P(k\\mid e)")}。密钥经过隐私放大后联合分布本身已不可得，所以这一项是「不适用」而不是「样本不足」。`,
-    },
-    {
-      id: "knist", idx: 6, name: "随机性测试",
-      rule: `${tex("n\\ge 10^{6}")}`,
-      actual: `${num(d.nBits)} bit`,
-      verdict: "部分可跑", tone: "warn",
-      formula: "n\\ \\ge\\ 10^{6}\\ \\Rightarrow\\ \\text{full suite}",
-      explain: `模板匹配、Maurer 通用统计、线性复杂度等检验项对样本长度有硬要求：需要 ${tex("10^6")} bit 量级。长度不足时显示“样本不足”，<strong>不记作通过</strong> —— 这是 NIST SP 800-22 的要求，不是本工具的保守设定。`,
-    },
-  ];
-
-  return card("数字域检查", `${checkTable(items)}
-    <div class="verdict warn">
-      <div><b>数字域定位：质量验证。</b></div>
-      <div>密钥已是隐私放大输出，条件最小熵无法估计。本域只回答「隐私放大做得对不对」，不回答「能提多少密钥」。</div>
-    </div>`,
-    `<span class="fit-hint">点击行查看公式与释义</span>${chip("放大后", "warn")}`);
-}
-
-/* ============================================================
-   12. 页面：模拟域分析
-   ============================================================ */
-
-function pageAnalog() {
-  if (!hasAnalog()) {
-    return `<div class="page-head"><p class="kicker">${kicker("analog")}</p><h2>信道信息量</h2></div>
-      ${card("", `<div class="empty"><h3>还缺信道数据</h3>
-      <p><button class="btn primary" data-act="goto" data-page="import">前往导入</button></p></div>`)}`;
-  }
-  const s = session();
-  const A = s.align;
-  const st = stationarity(A.series.ue);
-
-  const acfVals = {};
-  A.present.forEach((p) => { acfVals[p] = LAGS.map((L) => acfAt(A.common, A.series[p], L)); });
-  const decorr = {};
-  A.present.forEach((p) => {
-    const i = acfVals[p].findIndex((r) => r != null && r <= 0.2);
-    decorr[p] = i >= 0 ? LAGS[i] : null;
-  });
-
-  const acfSeries = A.present.map((p) => ({
-    name: PARTY_LABEL[p],
-    color: PARTY_COLOR[p],
-    xs: LAGS,
-    ys: acfVals[p],
-  }));
-
-
-  const pairs = [["ue", "nb"], ["ue", "eve"], ["nb", "eve"]]
-    .filter(([a, b]) => A.series[a] && A.series[b])
-    .map(([a, b]) => ({
-      a, b,
-      legal: a === "ue" && b === "nb",
-      r: pearson(A.series[a], A.series[b]),
-      color: a === "ue" && b === "nb" ? "#0d7a4b" : "#c2410c",
-    }));
-
-  const blocks = blockCandidates();
-  const blockPicker = `<div class="btn-row" style="margin:2px 0 16px">
-    ${BLOCKS.map((L) => `<button class="btn ${L === state.L ? "primary" : ""}" data-act="set-L" data-l="${L}">L = ${L} 秒</button>`).join("")}
-  </div>`;
-
-  const blockTable = `<table class="compact block-table">
-    <thead><tr><th>块长</th><th class="num">ρ(L)</th><th class="num">块数</th><th>依赖覆盖</th><th>样本支撑</th><th>成本</th><th>判定</th></tr></thead>
-    <tbody>${blocks.map((b) => `<tr class="${b.L === state.L ? "picked" : ""}" data-act="set-L" data-l="${b.L}">
-      <td><b>${b.L}s</b></td>
-      <td class="num">${fx(b.rho, 3)}</td>
-      <td class="num">${b.n}</td>
-      <td>${esc(b.cover)}</td>
-      <td>${esc(b.support)}</td>
-      <td>${esc(b.cost)}</td>
-      <td>${b.ok ? chip("可选", "ok") : chip("不满足", "warn")}</td>
-    </tr>`).join("")}</tbody></table>`;
-
+function segAnalog() {
+  const A = session().align;
   const u = estimateUL(state.L);
   const rec = recommendedBlock();
-  const sel = blocks.find((b) => b.L === state.L);
-  const qualifies = Boolean(sel && sel.ok);
-  const indepSel = Boolean(sel && Number.isFinite(sel.rho) && sel.rho <= 0.2);
-  const tone = u && u.ok && qualifies ? "ok" : "mute";
-
-  let alerts = "";
-  if (!u) {
-    alerts = `<div class="note-block dim">该块长下无法估计（样本或相关性退化）。</div>`;
-  } else if (!u.ok) {
-    alerts = `<div class="note-block danger">
-      <h4>样本不足，不给数值</h4>
-      当前 L=${u.L} 秒得到 ${u.n} 个块，低于 ${MIN_BLOCKS} 的下限。需要把采集时长拉伸到约
-      ${Math.ceil((MIN_BLOCKS * u.L * A.common.length) / Math.max(1, u.n))} 秒，或改用更小的 L。
-    </div>`;
-  } else if (!rec) {
-    alerts = `<div class="note-block danger">
-      <h4>未找到满足条件的块长 —— 下列数值仅为描述性参考</h4>
-      信道在 ${A.span} 秒内没有去相关（ρ(4s)=${fx(acfAt(A.common, A.series.ue, 4), 3)}），
-      因此块间独立假设不成立；同时拉长块长会让块数跌破 ${MIN_BLOCKS}。
-      要得到可用于结论的估计，需<strong>延长单次采集</strong>（约 30 分钟量级）或改用带时间依赖的参数模型。
-    </div>`;
-  } else if (!qualifies) {
-    alerts = `<div class="note-block dim">
-      <strong>当前 L = ${state.L} 秒未通过依赖覆盖</strong>（ρ = ${fx(sel ? sel.rho : NaN, 3)} &gt; 0.2），
-      下列数值仅作横向对比；建议块长 ${rec.L} 秒。
-    </div>`;
-  }
-
-  const results = !u ? "" : `<div class="figures">
-      ${fig(`块条件互信息 ${tex("U_L")}`, `${fx(u.base.U, 3)} <small>bit/s</small>`, u.ciU ? `90% CI ${fx(u.ciU.lo, 3)}–${fx(u.ciU.hi, 3)}` : "", tone)}
-      ${fig(`互信息差 ${tex("D_L")}`, u.base.D == null ? "—" : `${fx(u.base.D, 3)} <small>bit/s</small>`, u.base.D == null ? "缺 Eve 数据" : `截断前 ${fx(u.base.raw, 3)}`, u.base.D == null ? "mute" : tone)}
-      ${fig("块数", num(u.n), `每块 ${u.perBlock} 个观测`, "mute")}
-      ${fig("估计器", "E2", "块均值 + 偏相关", "mute")}
-    </div>`;
-
-  const formula = !u ? "" : `<div class="formula">${tex("U_{L}=\\frac{1}{L}\\,I(X^{L};Y^{L}\\mid Z^{L}),\\qquad D_{L}=\\frac{1}{L}\\left[I(X^{L};Y^{L})-I(X^{L};Z^{L})\\right]^{+}", true)}</div>`;
-
-  const assumptions = !u ? "" : `<div class="note-block" style="margin-top:14px">
-      <h4>假设清单（结果只在此前提下成立）</h4>
-      <ul>
-        <li>X、Y、Z 联合高斯</li>
-        <li>块均值代表块内全部信息 —— 方向上<strong>低估</strong> ${tex("U_L")}</li>
-        <li>块间独立（近似）—— ${indepSel ? `本数据集满足（ρ = ${fx(sel.rho, 3)} ≤ 0.2）` : "<strong>本数据集未满足</strong>"}</li>
-        <li>${tex("L")} 以秒计，故 ${tex("U_L")} 单位即 bit/s</li>
-      </ul>
-    </div>`;
+  const blocks = blockCandidates();
+  const st = stationarity(A.series.ue);
+  const acfSeries = A.present.map((p) => ({
+    name: PARTY_LABEL[p],
+    color: p === "ue" ? cv("--blue", "#245b9a") : p === "nb" ? cv("--green", "#378173") : cv("--orange", "#ad643c"),
+    xs: LAGS, ys: LAGS.map((L) => acfAt(A.common, A.series[p], L)),
+  }));
+  const pairs = [["ue", "nb"], ["ue", "eve"], ["nb", "eve"]]
+    .filter(([a, b]) => A.series[a] && A.series[b])
+    .map(([a, b]) => ({ a, b, r: pearson(A.series[a], A.series[b]), legal: a === "ue" && b === "nb" }));
 
   return `
-  <div class="page-head">
-    <p class="kicker">${kicker("analog")}</p>
-    <h2>信道信息量参考值</h2>
+  ${card("时间自相关", `${lineChart(acfSeries, { label: "自相关", yMin: -0.2, yMax: 1, markY: 0.2, xLabel: "滞后（秒，对数刻度）", yLabel: "自相关 ρ" })}
+    <p class="card-subnote">横轴为对数刻度。ρ 首次降到 0.2 以下的滞后作为去相关时间，只是诊断依据，不能证明块间独立。</p>`)}
+
+  ${card("互易性", `<div class="charts" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    ${pairs.map((p) => `<div class="plot"><h3>${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}　<span class="meta">${fx(p.r, 3)}</span></h3>${scatterChart(A.series[p.a], A.series[p.b], p.legal ? cv("--blue", "#245b9a") : cv("--orange", "#ad643c"), PARTY_LABEL[p.a], PARTY_LABEL[p.b])}</div>`).join("")}
   </div>
+  <p class="card-subnote">合法链路应显著正相关；窃听链路应接近 0。数值为整段皮尔逊相关。</p>`)}
 
-  ${card("时间自相关", `
-    ${lineChart(acfSeries, {
-      label: "自相关",
-      markY: 0.2,
-      yMin: -0.2,
-      yMax: 1,
-      w: 900,
-      h: 260,
-      interactive: true,
-      xLabel: "滞后 τ（秒，对数刻度）",
-      yLabel: "自相关 ρ(τ)",
-    })}
-    <div class="figures" style="margin-top:12px">
-      ${A.present.map((p) => fig(
-        `${PARTY_LABEL[p]} 去相关时间`,
-        decorr[p] ? `${decorr[p]} <small>秒</small>` : `&gt; 32 <small>秒</small>`,
-        `${tex("\\rho(1)")} = ${fx(acfVals[p][0], 3)}`,
-        decorr[p] ? "ok" : "warn"
-      )).join("")}
-    </div>
-    <div class="note-block dim" style="margin-top:14px">
-      把光标移到图上可读取任一滞后下三方的相关系数。去相关时间 = 自相关首次降到 0.2 以下的滞后，它<strong>只是诊断依据</strong>，不能证明块间独立。
-    </div>
-  `)}
+  ${card("块长候选", `<table class="data">
+    <thead><tr><th>块长</th><th class="num">ρ(L)</th><th class="num">块数</th><th>依赖覆盖</th><th>样本支撑</th><th class="num">判定</th></tr></thead>
+    <tbody>${blocks.map((b) => `<tr class="${b.L === state.L ? "picked" : ""} clickable" data-act="set-L" data-l="${b.L}">
+      <td><b style="font-weight:600">${b.L} s</b></td><td class="num">${fx(b.rho, 3)}</td><td class="num">${b.n}</td>
+      <td class="meta">${b.cover}</td><td class="meta">${b.support}</td>
+      <td class="num">${b.ok ? tag("可选", "ok") : tag("不满足", "warn")}</td></tr>`).join("")}</tbody>
+  </table>
+  <p class="card-subnote">点表格行切换当前块长；当前 L = ${state.L} 秒${rec ? `，建议块长 ${rec.L} 秒` : ""}。</p>`, tag(`L = ${state.L} 秒`, "info"))}
 
-  ${card("互易性", `<div class="split-3">
-    ${pairs.map((p) => `<figure class="plot">
-      <h3 style="font-size:14px;color:#6b7280;margin:0 0 6px">${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}</h3>
-      ${scatterChart(A.series[p.a], A.series[p.b], p.color, PARTY_LABEL[p.a], PARTY_LABEL[p.b])}
-    </figure>`).join("")}
+  ${card("信息量估计", `<div class="stats">
+    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", u && u.ciU ? `90% CI ${fx(u.ciU.lo, 3)}–${fx(u.ciU.hi, 3)}` : "样本不足", u && u.ok ? "info" : "mute")}
+    ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", u && u.base.D != null ? `截断前 ${fx(u.base.raw, 3)}` : "缺 Eve 数据", u && u.base.D > 0 ? "info" : "mute")}
+    ${stat("块数", u ? num(u.n) : "—", u ? `每块 ${u.perBlock} 个观测` : "—", "mute")}
+    ${stat("平稳性", st ? st.level : "—", st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", st ? st.tone : "mute")}
   </div>
-  <div class="figures" style="margin-top:14px">
-    ${pairs.map((p) => fig(
-      `${PARTY_LABEL[p.a]} ↔ ${PARTY_LABEL[p.b]}`,
-      fx(p.r, 3),
-      p.legal ? "合法链路，应显著正相关" : "窃听链路，应接近 0",
-      p.legal ? (p.r >= 0.5 ? "ok" : "warn") : (Math.abs(p.r) < 0.3 ? "ok" : "warn")
-    )).join("")}
-  </div>`)}
+  <p class="card-subnote">U_L 与 D_L 是模型下的参考值；当块间不独立时只作描述性参考，不能当作实际密钥速率。</p>`)}
 
-  ${card("块长与信息量", `
-    ${state.synthetic ? `<div class="note-block dim" style="margin-bottom:14px"><strong>合成演示数据</strong>　下面这组数值由人工生成的平稳序列算出，用于展示「数据合格时」的完整呈现；换成真实采集后数值会不同。</div>` : ""}
-    <div class="premise">
-      前提 · 三方对齐 ${pct(A.ratio)} ·
-      平稳性 <b class="${st ? st.tone : ""}">${st ? st.level : "未知"}</b>
-      （漂移 ${fx(st ? st.dMu : NaN, 2)}σ · 方差比 ${fx(st ? st.F : NaN, 2)}）
-      <em>与「数据导入 → 适用性检查」同源，此处不重复展开</em>
-    </div>
-    ${alerts}
-    ${blockPicker}
-    ${results}
-    <h3 class="block-title">块长候选</h3>
-    ${blockTable}
-    ${formula}
-    ${assumptions}
-  `, chip(`L = ${state.L} 秒`, "info"))}
-
-  ${card("安全性结论", secConclusion(analogConclusion(), "模拟域 · 定量依据"), chip("模拟域", "info"))}
+  ${conclusionBlock(analogConclusion(), "模拟域 · 定量依据")}
   `;
 }
 
-/* ============================================================
-   13. 页面：数字域分析
-   ============================================================ */
-
-function pageDigital() {
-  if (!hasKeys()) {
-    return `<div class="page-head"><p class="kicker">${kicker("digital")}</p><h2>密钥质量验证</h2></div>
-      ${card("", `<div class="empty"><h3>还缺密钥文件</h3>
-      <p><button class="btn primary" data-act="goto" data-page="import">前往导入</button></p></div>`)}`;
-  }
+function segDigital() {
   const d = digital();
   const t = nist();
-
-  const groupRows = BS.map((bb) => {
-    const gg = d.groups[bb];
-    return `<tr>
-      <td><b>${bb}</b></td>
-      <td class="num">${num(gg.nb)}</td>
-      <td class="num">${num(gg.states)}</td>
-      <td class="num">${fx(gg.ratio, 1)}</td>
-      <td class="num">${num(gg.filled)}</td>
-      <td class="num">${fx(gg.hmin, 3)}</td>
-      <td class="num">${gg.marginalOk ? chip("可估", "ok") : chip("不足", "warn")}</td>
-    </tr>`;
-  }).join("");
-
+  const g8 = d.groups[8];
   return `
-  <div class="page-head">
-    <p class="kicker">${kicker("digital")}</p>
-    <h2>密钥质量验证</h2>
+  ${card("一致性与分组", `<div class="stats">
+    ${stat("合法方 KDR", pct(d.kdr, 2), d.same ? "完全一致" : "流程硬失败", d.same ? "ok" : "bad")}
+    ${stat("Eve 和合法方的 KDR", pct(d.eveRate, 2), "理想独立序列 ≈ 50%", Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
+    ${stat("密钥总量", `${num(d.nBits)} <small>bit</small>`, `${num(d.lines)} 行 × ${d.width}`, "mute")}
+    ${stat("单块最小熵", `${fx(g8.hmin, 3)} <small>bit</small>`, `8 bit 块 · ${num(g8.nb)} 组`, g8.hmin >= 7 ? "ok" : "warn")}
   </div>
-
-  ${card("一致性断言", `<div class="figures">
-    ${fig("UE ↔ 基站 的 KDR", d.kdr == null ? "—" : pct(d.kdr, 2), d.same ? "完全一致，0 bit 差异" : "流程硬失败", d.same ? "ok" : "bad")}
-    ${fig("Eve ↔ UE 的 KDR", d.eveRate == null ? "—" : pct(d.eveRate, 2), "比特差异，独立序列应≈50%", d.eveRate == null ? "mute" : Math.abs(d.eveRate - 0.5) < 0.05 ? "ok" : "warn")}
-    ${fig("密钥总量", `${num(d.nBits)} bit`, `${num(d.lines)} 行 × ${d.width}`, "mute")}
-    ${fig("Eve 侧长度", `${num(d.nBitsE)} bit`, `${num(d.linesE)} 行`, "mute")}
-  </div>
-  <p class="card-subnote">
-    KDR 是两串密钥逐位异或后 1 的占比。Eve 和合法方的 KDR 接近 50%，说明两串密钥互不相关；若显著低于 50%，说明 Eve 能复现合法密钥，属于严重异常。
-  </p>`)}
-
-  ${card("分组与最小熵", `<table class="compact group-table">
-    <thead><tr><th>块长 ${tex("b")}</th><th class="num">组数</th><th class="num">状态 ${tex("2^b")}</th><th class="num">样本/状态</th><th class="num">覆盖</th><th class="num">${tex("H_{\\min}")}</th><th class="num">识别性</th></tr></thead>
-    <tbody>${groupRows}</tbody>
+  <table class="data" style="margin-top:14px">
+    <thead><tr><th>块长 b</th><th class="num">组数</th><th class="num">状态 2^b</th><th class="num">样本/状态</th><th class="num">覆盖</th><th class="num">H_min</th><th class="num">识别性</th></tr></thead>
+    <tbody>${BS.map((b) => {
+      const g = d.groups[b];
+      return `<tr><td>${b}</td><td class="num">${num(g.nb)}</td><td class="num">${num(g.states)}</td><td class="num">${fx(g.ratio, 1)}</td>
+        <td class="num">${num(g.filled)}</td><td class="num">${fx(g.hmin, 3)}</td><td class="num">${g.marginalOk ? tag("可估", "ok") : tag("不足", "warn")}</td></tr>`;
+    }).join("")}</tbody>
   </table>
-  <div class="note-block dim" style="margin-top:16px">
-    <h4>关于 ${tex("H_{\\min}")}</h4>
-    <div class="formula">${tex("H_{\\min}(K)=-\\log_{2}\\frac{\\max_{k}N(k)}{N_{b}}")}</div>
-    这是隐私放大的输出目标。达标只说明隐私放大实现正确，<strong>不构成保密证据</strong>；
-    也不允许把「块级最小熵 × 块数」当作对 Eve 的保密熵。
-    <p style="margin:10px 0 0">
-      真正的安全指标是<strong>条件最小熵</strong> ${tex("H_{\\min}(K\\mid E)")}（Eve 已知时的熵），
-      它需要隐私放大前的量化比特，当前数据不可得 —— 所以本域只做质量验证，不估计秘密随机性。
-    </p>
-  </div>`)}
+  <p class="card-subnote">b 越大 H_min 越高，但样本/状态不足时直方图稀疏、最大频次被低估，数字不可信 —— 这张表不能横向比大小。</p>`)}
 
-  ${card("NIST SP 800-22", `<div class="figures" style="margin-bottom:14px">
-      ${fig("通过", `${t.passed} / ${t.judged.length}`, "仅统计可判定项", t.passed === t.judged.length ? "ok" : "warn")}
-      ${fig("样本长度", `${num(t.n)} bit`, `共 ${t.rows.length} 项检验`, "mute")}
-      ${fig("可判定", `${t.judged.length} 项`, "其余长度不足", "warn")}
-    </div>
-    <table class="compact nist-table">
-      <thead><tr><th>检验项</th><th>参数</th><th class="num">p 值</th><th class="num">判定</th></tr></thead>
-      <tbody>${t.rows.map((r) => {
-        const on = state.nistOpen === r.id;
-        const row = `<tr class="check-tr ${on ? "open" : ""}" data-act="nist" data-id="${r.id}">
-          <td>${r.name}</td>
-          <td>${r.param || ""}</td>
-          <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td>
-          <td class="num">${chip(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td>
-        </tr>`;
-        if (!on) return row;
-        return row + `<tr class="check-note"><td colspan="4"><div class="check-pop">
-          <div class="check-pop-head"><strong>${r.name}</strong></div>
-          <p>${NIST_DOC[r.id] || ""}</p>
-          <div class="check-pop-meta"><b>适用条件</b>${r.req || "-"}</div>
-        </div></td></tr>`;
-      }).join("")}</tbody>
-    </table>`,
-    `<span class="fit-hint">点击检验项查看说明</span>${chip(`${t.passed} / ${t.judged.length} 通过`, t.passed === t.judged.length ? "ok" : "warn")}`)}
-
-  ${card("安全性结论", secConclusion(digitalConclusion(), "数字域 · 定量依据"), chip("数字域", "info"))}
+  ${card("NIST SP 800-22", `<div class="stats" style="margin-bottom:12px">
+    ${stat("通过", `${t.passed} / ${t.judged.length}`, "仅统计可判定项", t.passed === t.judged.length ? "ok" : "warn")}
+    ${stat("样本长度", `${num(t.n)} <small>bit</small>`, `共 ${t.rows.length} 项检验`, "mute")}
+    ${stat("可判定", `${t.judged.length} 项`, "其余长度不足", "warn")}
+  </div>
+  <table class="data"><thead><tr><th>检验项</th><th>参数</th><th class="num">p 值</th><th class="num">判定</th></tr></thead>
+    <tbody>${t.rows.map((r) => {
+      const open = state.nistOpen === r.id;
+      const row = `<tr class="clickable" data-act="nist" data-id="${r.id}"><td>${r.name}</td><td class="meta">${r.param || ""}</td>
+        <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td><td class="num">${tag(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td></tr>`;
+      return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
+    }).join("")}</tbody></table>`, `<span class="hint">点击行查看说明</span>`)}
+  ${conclusionBlock(digitalConclusion(), "数字域 · 定量依据")}
   `;
 }
 
-/* ============================================================
-   14. 页面：调和与放大
-   ============================================================ */
-
-function budget() {
-  const n = Math.max(1, Math.round(Number(state.pN) || 0));
-  const rate = Math.min(0.99, Math.max(0.05, Number(state.pRate) || 0.75));
-  const leak = state.pLeakMode === "rate"
-    ? Math.round(n * (1 - rate))
-    : Math.round(Number(state.pActualPublic) || 0);
-  const other = Math.round(Number(state.pOther) || 0);
-  const pa = Math.round(Number(state.pPa) || 0);
-  const auth = Math.round(Number(state.pAuthBits) || 0);
-  const hmin = Math.round(Number(state.pHmin) || 0);
-  const spent = leak + other + pa + auth;
-  const raw = hmin - spent;
-  return { n, rate, leak, other, pa, auth, hmin, spent, raw, safe: Math.max(0, raw) };
-}
-
-function pageRecon() {
+function segFinal() {
+  const b = budget();
   const d = hasKeys() ? digital() : null;
   const actual = d ? d.nBits : null;
-  const b = budget();
   const feasible = actual != null && b.raw >= 0 && actual <= b.safe;
   const seconds = Math.max(1, Number(state.pSeconds) || 1);
   const succ = Math.min(100, Math.max(0, Number(state.pSucc) || 0));
   const netRate = actual == null ? null : (actual * (succ / 100)) / seconds;
-
   const verdict = actual == null
-    ? `<div class="verdict warn"><div><b>还缺密钥文件</b></div><div>导入密钥后才能与实际提取长度比对。</div></div>`
+    ? `<div class="note warn">还缺密钥文件，导入后才能与实际提取长度比对。</div>`
     : b.raw < 0
-      ? `<div class="verdict bad"><div><b>参数不可行</b></div><div>熵 ${num(b.hmin)} bit 覆盖不了 ${num(b.spent)} bit 的扣除项，任何长度的提取都没有依据。</div></div>`
+      ? `<div class="note bad">参数不可行：熵 ${num(b.hmin)} bit 覆盖不了 ${num(b.spent)} bit 的扣除项。</div>`
       : feasible
-        ? `<div class="verdict"><div><b>当前配置可行</b></div><div>建议最多提取 ${num(b.safe)} bit，实际 ${num(actual)} bit，余量 ${num(b.safe - actual)} bit。</div></div>`
-        : `<div class="verdict bad"><div><b>提取量超出预算</b></div><div>建议最多 ${num(b.safe)} bit，实际提取 ${num(actual)} bit，超出 ${num(actual - b.safe)} bit —— 协议参数或熵假设需要重新核对。</div></div>`;
-
-  const field = (label, key, opt) => `<label class="field"><span>${label}</span>
-    <input type="number" data-field="${key}" value="${state[key]}" ${opt || ""}/></label>`;
+        ? `<div class="note">当前配置可行：建议最多 ${num(b.safe)} bit，实际 ${num(actual)} bit，余量 ${num(b.safe - actual)} bit。</div>`
+        : `<div class="note bad">提取量超出预算：建议最多 ${num(b.safe)} bit，实际 ${num(actual)} bit，超出 ${num(actual - b.safe)} bit。</div>`;
 
   return `
-  <div class="page-head">
-    <p class="kicker">${kicker("recon")}</p>
-    <h2>熵预算</h2>
-  </div>
-
-  ${card("协议参数", `<div class="grid-3 form-grid">
-    ${field("原始保留比特 n", "pN", 'min="1" step="1024"')}
-    ${field("码率 r", "pRate", 'min="0.05" max="0.99" step="0.01"')}
-    <label class="field"><span>公开泄露取值</span>
-      <select data-field="pLeakMode">
-        <option value="rate" ${state.pLeakMode === "rate" ? "selected" : ""}>按码率推算 n(1−r)</option>
-        <option value="actual" ${state.pLeakMode === "actual" ? "selected" : ""}>按实测位数</option>
-      </select>
-    </label>
-    ${state.pLeakMode === "actual" ? field("实测公开位数", "pActualPublic", 'min="0" step="64"') : ""}
-    ${field("其他公开信息", "pOther", 'min="0" step="64"')}
-    ${field(`隐私放大余量 ${tex("\\Delta_{\\mathrm{PA}}")}`, "pPa", 'min="0" step="64"')}
-    ${field("认证预共享位数", "pAuthBits", 'min="0" step="32"')}
-    ${field(`假设的调和前熵 ${tex("\\overline{H}_{\\min}")}`, "pHmin", 'min="0" step="1024"')}
-    ${field("处理时长（秒）", "pSeconds", 'min="1" step="1"')}
-    ${field("调和成功率（%）", "pSucc", 'min="0" max="100" step="1"')}
-  </div>`)}
-
-  ${card("熵预算表", `
-    <div class="formula">${tex("\\ell_{\\mathrm{safe}}=\\max\\left\\{0,\\ \\overline{H}_{\\min}(K_A\\mid E)-\\lambda_{\\mathrm{public}}-\\Delta_{\\mathrm{PA}}\\right\\}", true)}</div>
-    <div class="ledger">
-      ${readLine(`原始保留比特 ${tex("n")}`, `${num(b.n)} <small>bit</small>`)}
-      ${readLine(`调和前熵下界 ${tex("\\overline{H}_{\\min}")}`, `${num(b.hmin)} <small>bit</small>`)}
-      ${readLine(`公开泄露 ${tex("\\lambda_{\\mathrm{public}}")}`, `− ${num(b.leak)} <small>bit</small>`)}
-      ${readLine("其他公开信息", `− ${num(b.other)} <small>bit</small>`)}
-      ${readLine(`隐私放大余量 ${tex("\\Delta_{\\mathrm{PA}}")}`, `− ${num(b.pa)} <small>bit</small>`)}
-      ${readLine("认证预共享密钥", `− ${num(b.auth)} <small>bit</small>`)}
-      ${readLine(`建议提取长度 ${tex("\\ell_{\\mathrm{safe}}")}`, `${num(b.safe)} <small>bit</small>`, b.raw < 0 ? "bad" : "ok")}
-      ${readLine("实际提取长度", actual == null ? "—" : `${num(actual)} <small>bit</small>`, actual == null ? "mute" : feasible ? "ok" : "bad")}
+  ${card("熵预算", `
+    <div class="stats" style="margin-bottom:14px">
+      ${stat("建议提取长度 ℓ_safe", `${num(b.safe)} <small>bit</small>`, "假设输入下的上界", b.raw < 0 ? "bad" : "info")}
+      ${stat("实际提取", actual == null ? "—" : `${num(actual)} <small>bit</small>`, actual == null ? "未导入密钥" : feasible ? "在预算内" : "超出预算", actual == null ? "mute" : feasible ? "ok" : "bad")}
+      ${stat("净速率", netRate == null ? "—" : `${fx(netRate, 1)} <small>bit/s</small>`, `按 ${num(seconds)} 秒折算`, "mute")}
+      ${stat("调和成功率", `${num(succ)} %`, succ >= 100 ? "全部批次成功" : "按输入值折算", succ >= 100 ? "ok" : "warn")}
     </div>
-    ${verdict}`,
-    chip(b.raw < 0 ? "参数不可行" : `${num(b.safe)} bit`, b.raw < 0 ? "bad" : "info"))}
+    ${barRows([
+      { label: "调和前熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: "info" },
+      { label: "公开泄露 λ", value: b.leak, text: `− ${num(b.leak)} bit` },
+      { label: "其他公开信息", value: b.other, text: `− ${num(b.other)} bit` },
+      { label: "隐私放大余量", value: b.pa, text: `− ${num(b.pa)} bit` },
+      { label: "认证预共享", value: b.auth, text: `− ${num(b.auth)} bit` },
+      { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
+    ])}
+    ${verdict}
+    <p class="card-subnote">协议参数在「评估设置 → 分析参数」里修改；熵与码率是假设输入，不是实测值。</p>`)}
+  <div class="concl mute">
+    <div class="concl-head"><span class="concl-tag">只给上界，不给认证</span></div>
+    <p class="concl-text">预算算的是「不超过多少 bit」，不是「至少有这么多安全熵」。真正可认证的安全长度还缺隐私放大前的量化比特。</p>
+  </div>
+  `;
+}
 
-  ${card("速率与批次", `<div class="figures">
-    ${fig("净速率", netRate == null ? "—" : `${fx(netRate, 1)} <small>bit/s</small>`, `按全部 ${num(seconds)} 秒运行时间`, netRate == null ? "mute" : "ok")}
-    ${fig("每批次密钥", actual == null ? "—" : `${num(actual)} <small>bit</small>`, "单批次，实际提取", "mute")}
-    ${fig("调和成功率", `${num(succ)} %`, succ >= 100 ? "全部批次成功" : "按输入值折算", succ >= 100 ? "ok" : "warn")}
-  </div>`)}
+function pageResults() {
+  if (!hasAny()) {
+    return `<div class="page-head"><h2>分析结果</h2></div>
+      ${card(null, emptyBox("还没有数据", `<p>先在「评估设置」导入三方数据，或载入示例 / 合成演示。</p><p><button class="btn primary" data-jump="input">去评估设置</button></p>`))}`;
+  }
+  const src = state.synthetic ? "合成演示 · 1 组" : `当前会话 · 1 组`;
+  const segs = [["analog", "模拟域"], ["digital", "数字域"], ["final", "最终密钥"]];
+  const segBody = state.seg === "analog"
+    ? (hasAnalog() ? segAnalog() : card(null, emptyBox("还缺信道数据", "<p>模拟域需要 Alice、Bob 两方（最好三方）的 CSI/RSSI。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
+    : state.seg === "digital"
+      ? (hasKeys() ? segDigital() : card(null, emptyBox("还缺密钥文件", "<p>数字域需要 Alice / Bob 的 TXT 密钥。</p><p><button class=\"btn primary\" data-jump=\"input\">去评估设置</button></p>")))
+      : segFinal();
+  return `
+  <div class="page-head"><h2>分析结果</h2><span class="meta">${src}</span></div>
+  <div class="toolbar">
+    <div class="segments" role="group" aria-label="分析阶段">${segs.map(([id, name]) => `<button data-act="seg" data-seg="${id}" aria-pressed="${state.seg === id}">${name}</button>`).join("")}</div>
+    <span class="meta">当前阶段：${(segs.find((s) => s[0] === state.seg) || segs[0])[1]}</span>
+  </div>
+  ${segBody}
   `;
 }
 
 /* ============================================================
-   15. 页面：报告与历史
+   13. 评估报告
    ============================================================ */
 
 function pageReport() {
   const p = premise();
-  const s = session();
-  const A = s.align;
-  const d = hasKeys() ? digital() : null;
-  const u = hasAnalog() ? estimateUL(state.L) : null;
-  const t = nist();
-  const rec = recommendedBlock();
-  const b = budget();
   const ac = analogConclusion();
   const dc = digitalConclusion();
+  const b = budget();
+  const d = hasKeys() ? digital() : null;
   const actual = d ? d.nBits : null;
-  const tau = extrapTau();
-  const feasible = actual != null && b.raw >= 0 && actual <= b.safe;
-  const q = (s) => `<span class="q-group">${s}</span>`;
-  const rhoSel = hasAnalog() ? acfAt(A.common, A.series.ue, state.L) : null;
-  const indepSel = Number.isFinite(rhoSel) && rhoSel <= 0.2;
+  const A = hasAnalog() ? session().align : null;
+  const u = hasAnalog() ? estimateUL(state.L) : null;
+  const tone = !hasAny() ? "mute" : p.tone === "bad" ? "bad" : "warn";
+  const label = !hasAny() ? "尚未导入" : p.tone === "bad" ? "前提不成立" : "分域结论 · 不合并评级";
 
-  const analogQuant = u
-    ? [
-      q(`U_L ${fx(u.base.U, 3)} bit/s`),
-      q(`D_L ${u.base.D == null ? "—" : `${fx(u.base.D, 3)} bit/s`}`),
-      indepSel ? null : q("（描述性）"),
-    ].filter(Boolean).join(" · ")
-    : "无信道数据";
-  const digitalQuant = d && t
-    ? [
-      q(`NIST ${t.passed}/${t.judged.length}`),
-      q(`Eve KDR ${pct(d.eveRate, 2)}`),
-      q(`H_min ${fx(d.groups[8].hmin, 3)} / 8 bit`),
-    ].join(" · ")
-    : "无密钥数据";
-  const budgetQuant = actual == null
-    ? [q(`ℓ_safe ${num(b.safe)} bit`), q("待导入密钥")].join(" · ")
-    : b.raw < 0
-      ? [q("ℓ_safe 0 bit"), q(`实际 ${num(actual)} bit`), q("不可行")].join(" · ")
-      : [q(`ℓ_safe ${num(b.safe)} bit`), q(`实际 ${num(actual)} bit`), q(`余量 ${num(b.safe - actual)} bit`)].join(" · ");
-  const budgetChip = actual == null
-    ? { text: "待比对", tone: "mute" }
-    : b.raw < 0
-      ? { text: "参数不可行", tone: "bad" }
-      : feasible
-        ? { text: "假设下可行", tone: "warn" }
-        : { text: "超出预算", tone: "bad" };
-
-  const domainRow = (name, sub, c, quant, bound) => `<tr>
-      <td class="sc-k"><b>${name}</b><div class="sc-sub">${sub}</div></td>
-      <td>${c ? chip(c.short, c.tone) : chip("无数据", "mute")}</td>
-      <td class="sc-quant">${quant}</td>
-      <td class="sc-bound">${bound}</td>
-    </tr>`;
-
-  const rows = [
-    domainRow("模拟域", "信道信息量", ac, analogQuant, hasAnalog()
-      ? (indepSel ? "假设：联合高斯 / 块均值 / 块间独立" : `块间独立未满足（ρ(${state.L} s) = ${fx(rhoSel, 3)}）`)
-      : "缺三方信道数据"),
-    domainRow("数字域", "密钥质量", dc, digitalQuant, d
-      ? "H_min(K|E) 不可得，保密强度未证明"
-      : "缺密钥文件"),
-    `<tr>
-      <td class="sc-k"><b>熵预算</b><div class="sc-sub">提取长度</div></td>
-      <td>${chip(budgetChip.text, budgetChip.tone)}</td>
-      <td class="sc-quant">${budgetQuant}</td>
-      <td class="sc-bound">熵与协议参数为假设输入</td>
-    </tr>`,
-  ].join("");
-
-  const conclTone = !hasAny() ? "mute" : p.tone === "bad" || (ac && ac.tone === "bad") || (dc && dc.tone === "bad") ? "bad" : "warn";
-  const conclLabel = !hasAny() ? "尚未导入" : p.tone === "bad" ? "前提不成立" : "分域结论 · 不合并评级";
-  const budgetPhrase = actual == null
-    ? `熵预算在假设输入下给出 ${num(b.safe)} bit 的建议长度，尚未与实际提取比对`
-    : b.raw < 0
-      ? "熵预算参数不可行"
-      : `熵预算在假设输入下留有 ${num(b.safe - actual)} bit 余量`;
-  const conclText = !hasAny()
-    ? "导入三方信道与密钥后，这里会分别给出模拟域与数字域的安全性结论；左表的定量依据随数据自动填充。"
-    : p.tone === "bad"
-      ? `${p.note}两个域都不给出数值结论。`
-      : `本次评估不给出合并的安全等级。模拟域：${ac ? ac.label : "无数据"}；数字域：${dc ? dc.label : "无数据"}；${budgetPhrase}。`
-        + `三条结论各自在自身条件下成立，不能相互替代 —— 模拟域回答「信道里有多少可用的秘密信息」，数字域回答「提取出的密钥是否合格」，预算回答「提取长度是否超出假设的熵」。`;
-
-  const gaps = [
-    "隐私放大前的量化比特 —— 决定 H_min(K|E)，缺了它就没有保密强度",
-    `满足 ρ(L) ≤ 0.2 且块数 ≥ ${MIN_BLOCKS} 的采集 —— 当前 ${A ? `${A.common.length} 秒` : "—"}${tau ? `，按外推需约 ${num(Math.round(MIN_BLOCKS * tau))} 秒` : ""}`,
-    "Eve 侧信息量的上界 —— 目前只有 Eve 和合法方的 KDR 作为间接证据",
+  const findings = [
+    { h: "信道源", t: u ? `块条件互信息 ${fx(u.base.U, 3)} bit/s${ac && ac.label === "模型下可达" ? "" : "（描述性）"}，合法方相对 Eve 的信息优势 ${u.base.D == null ? "—" : fx(u.base.D, 3)} bit/s。` : "未导入信道数据。" },
+    { h: "数字域", t: d ? `合法方 KDR ${pct(d.kdr, 2)}，Eve 和合法方的 KDR ${pct(d.eveRate, 2)}，NIST ${nist() ? nist().passed : 0}/${nist() ? nist().judged.length : 0} 通过。` : "未导入密钥。" },
+    { h: "最终判断", t: actual == null ? "缺少密钥，无法比对提取长度。" : b.raw < 0 ? "熵假设覆盖不了扣除项，参数不可行。" : `建议提取 ${num(b.safe)} bit，实际 ${num(actual)} bit，${actual <= b.safe ? "在预算内" : "超出预算"}；保密强度仍缺 H_min(K|E)。` },
   ];
 
-  const condRows = [
-    readLine("适用范围", esc(`${state.env} · ${state.motion} · RIS ${state.ris} · ${state.attack} · 信道${state.channel}`), ""),
-    readLine("数据指纹", `#${fingerprint()}`, ""),
-    readLine("重叠时长", A ? `${num(A.common.length)} 秒（占 ${pct(A.ratio)}）` : "—", A && A.ratio >= 0.5 ? "ok" : "warn"),
-    readLine("建议块长", rec ? `${rec.L} 秒` : "不满足条件", rec ? "ok" : "warn"),
-    readLine("密钥总长", d ? `${num(d.nBits)} bit` : "—", "mute"),
-    readLine("建议提取长度", b.raw < 0 ? "参数不可行" : `${num(b.safe)} bit（假设输入）`, b.raw < 0 ? "bad" : "warn"),
-  ].join("");
+  const rows = [
+    ["三方数据", A ? `${num(A.common.length)} 秒（${pct(A.ratio)}）` : "—", A && A.ratio >= 0.5 ? tag("已对齐", "ok") : tag("未对齐", "warn")],
+    ["模拟域", ac ? ac.label : "—", ac ? tag(ac.tone === "ok" ? "可用" : ac.tone === "bad" ? "不可用" : "参考", ac.tone) : "—"],
+    ["数字域", dc ? dc.label : "—", dc ? tag(dc.tone === "ok" ? "通过" : dc.tone === "bad" ? "失败" : "未证明", dc.tone) : "—"],
+    ["熵预算", b.raw < 0 ? "参数不可行" : `${num(b.safe)} bit`, b.raw < 0 ? tag("不可行", "bad") : tag("假设输入", "warn")],
+    ["安全长度", "不予认证", tag("缺 H_min(K|E)", "warn")],
+  ];
 
   return `
-  <div class="page-head">
-    <p class="kicker">${kicker("report")}</p>
-    <h2>安全性结论与记录</h2>
+  <div class="page-head"><h2>评估报告</h2><span class="meta">${state.synthetic ? "合成演示" : "当前会话"} · ${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div>
+
+  <div class="concl ${tone}">
+    <div class="concl-head"><span class="concl-tag">${esc(label)}</span><span class="meta">两域 + 熵预算</span></div>
+    <p class="concl-text">${!hasAny()
+      ? "导入数据后会在这里给出分域结论：模拟域回答信道里有多少可用的秘密信息，数字域回答提取出的密钥是否合格。"
+      : p.tone === "bad" ? esc(p.note) : `本次评估不给出合并的安全等级。模拟域：${ac ? ac.label : "无数据"}；数字域：${dc ? dc.label : "无数据"}；${actual == null ? "熵预算待密钥导入后比对" : b.raw < 0 ? "熵预算参数不可行" : `熵预算留有 ${num(b.safe - actual)} bit 余量`}。`}</p>
   </div>
 
-  ${premiseBlock(p)}
+  ${card("秘密熵预算", barRows([
+    { label: "调和前熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: "info" },
+    { label: "公开泄露 λ", value: b.leak, text: `− ${num(b.leak)} bit` },
+    { label: "其他公开信息", value: b.other, text: `− ${num(b.other)} bit` },
+    { label: "隐私放大余量", value: b.pa, text: `− ${num(b.pa)} bit` },
+    { label: "认证预共享", value: b.auth, text: `− ${num(b.auth)} bit` },
+    { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
+  ]) + `<p class="card-subnote">第一行为假设输入；扣除项来自协议参数。这张图表示账目关系，不是统计分布。</p>`)}
 
-  ${card("安全性结论", `<table class="compact concl-table report-table">
-      <thead><tr><th>域</th><th>结论</th><th>关键定量</th><th>边界 / 缺口</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="concl ${conclTone}">
-      <div class="concl-head">
-        <span class="concl-tag">${esc(conclLabel)}</span>
-        <span class="concl-sub">两域 + 熵预算</span>
-      </div>
-      <p class="concl-text">${esc(conclText)}</p>
-    </div>
-    ${hasAny() ? `<p class="concl-note">要给出「该密钥对 Eve 的保密强度 ≥ X bit」，仍缺三项证据：${gaps.map((x, i) => `${"①②③"[i]} ${x}`).join("；")}。</p>` : ""}`,
-    chip("综合", "info"))}
+  ${card("关键发现", findings.map((f) => `<p style="margin:0 0 14px"><b style="color:var(--blue);font-weight:600;display:block;margin-bottom:3px">${f.h}</b>${f.t}</p>`).join(""))}
 
-  ${card("评估条件与输入", `<div class="ledger">${condRows}</div>
-    <div class="btn-row" style="margin-top:16px">
+  ${card("评估项", `<table class="data"><thead><tr><th>评估项</th><th>结果</th><th class="num">状态</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")}</tbody></table>
+  <details><summary>评估依据与边界</summary>
+    <p>结论分模拟域与数字域分别给出，不支持合并为单一安全等级。熵与协议参数为假设输入；随机性检验与 KDR 只排除统计异常，不能证明密钥对 Eve 保密。</p>
+    <p>要给出「保密强度 ≥ X bit」，仍缺：① 隐私放大前的量化比特（决定 H_min(K|E)）；② 满足 ρ(L) ≤ 0.2 且块数 ≥ 30 的采集；③ Eve 侧信息量的上界。</p>
+  </details>`)}
+
+  ${card("报告与历史", `<div class="btn-row no-print">
       <button class="btn primary" data-act="export">导出 JSON</button>
       <button class="btn" data-act="print">打印 / 另存 PDF</button>
       <button class="btn ghost" data-act="save-history">存入历史</button>
-    </div>`)}
-
-  ${card("历史", state.history.length ? `<table class="compact hist-table">
-      <thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
-      <tbody>${state.history.map((h) => `<tr>
-        <td>${esc(h.at)}</td><td>${esc(h.scene)}</td><td class="num">${h.L}s</td><td class="num">${num(h.bits)}</td>
-        <td>${h.analog ? chip(h.analog.short, h.analog.tone) : "—"}</td>
-        <td>${h.digital ? chip(h.digital.short, h.digital.tone) : "—"}</td>
-      </tr>`).join("")}</tbody></table>` : `<div class="empty">还没有历史记录。点击「存入历史」保存本次参数与结果。</div>`)}
+    </div>
+    <div class="divider"></div>
+    ${state.history.length ? `<table class="data"><thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
+      <tbody>${state.history.map((h) => `<tr><td>${esc(h.at)}</td><td class="meta">${esc(h.scene)}</td><td class="num">${h.L}s</td><td class="num">${num(h.bits)}</td>
+        <td>${h.analog ? tag(h.analog.short, h.analog.tone) : "—"}</td><td>${h.digital ? tag(h.digital.short, h.digital.tone) : "—"}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="meta">还没有历史记录。</p>`}`)}
   `;
 }
+
+/* ============================================================
+   14. 壳与渲染
+   ============================================================ */
+
+function topbar() {
+  const p = premise();
+  const d = hasKeys() ? digital() : null;
+  return `<header class="topbar">
+    <div class="brand">${ico("tower", 20)}物理层密钥安全评估</div>
+    <div class="top-meta">
+      <span>项目：城市无线测评</span><span class="sep">｜</span>
+      ${state.synthetic ? `<span class="badge synth">合成演示数据</span>` : ""}
+      <span class="badge ${p.tone === "bad" ? "bad" : ""}">${esc(state.attack)} · 信道${esc(state.channel)}</span>
+      ${d ? `<span class="badge">${num(d.nBits)} bit</span>` : ""}
+    </div>
+  </header>`;
+}
+
+function nav() {
+  return `<nav class="nav" aria-label="主导航">${TABS.map((t) => `<button data-tab="${t.id}" ${state.tab === t.id ? 'aria-current="page"' : ""}>${t.name}</button>`).join("")}</nav>`;
+}
+
+function footer() {
+  return `<footer><span>${hasAny() ? (state.synthetic ? "合成演示数据 · 结果仅用于展示流程" : "真实采集数据 · 分析结果随参数实时计算") : "未导入数据"}</span><span>指纹 #${fingerprint()} · 物理层密钥安全评估</span></footer>`;
+}
+
+function pageBody() {
+  if (state.tab === "home") return pageHome();
+  if (state.tab === "input") return pageInput();
+  if (state.tab === "results") return pageResults();
+  if (state.tab === "report") return pageReport();
+  return pageHome();
+}
+
+function render() {
+  document.getElementById("app").innerHTML = `<div class="sheet">${topbar()}${nav()}<main>${pageBody()}</main>${footer()}</div>`;
+  typeset();
+  if (state.toast) {
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = state.toast;
+    document.body.appendChild(t);
+    state.toast = "";
+    setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
+  }
+}
+
+function toast(msg) { state.toast = msg; render(); }
 
 function fingerprint() {
   const parts = SLOTS.map((s) => {
@@ -2184,182 +1966,49 @@ function fingerprint() {
 }
 
 /* ============================================================
-   17. 骨架
+   15. 交互
    ============================================================ */
-
-function topbar() {
-  return `<header class="topbar">
-    <div class="brand">
-      <div class="mark" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M3 9h12M9 3v12" stroke="currentColor" stroke-width="1.6"/>
-          <circle cx="9" cy="9" r="2.2" fill="currentColor"/>
-        </svg>
-      </div>
-      <div>
-        <h1>物理层密钥安全性评估工作台</h1>
-        <p>Physical-layer Key Security Workbench</p>
-      </div>
-    </div>
-    <div class="top-meta">
-      ${state.synthetic ? `<span class="badge synth">合成演示数据</span>` : ""}
-      <span class="badge ${state.attack === "被动窃听" && state.channel === "已认证" ? "" : "bad"}">${esc(state.attack)} · 信道${esc(state.channel)}</span>
-    </div>
-  </header>`;
-}
-
-function sidebar() {
-  return `<aside class="sidebar">
-    <div class="side-label">流程</div>
-    ${PAGES.map((p, i) => {
-      const st = statusOf(p.id);
-      return `<button class="nav-btn ${state.page === p.id ? "active" : ""}" data-act="goto" data-page="${p.id}">
-        <small>${String(i + 1).padStart(2, "0")}</small>
-        <span class="nav-txt">${p.name}</span>
-        <span class="nav-state ${st === "mute" ? "" : st}"></span>
-      </button>`;
-    }).join("")}
-  </aside>`;
-}
-
-function rail() {
-  const s = session();
-  const A = s.align;
-  const d = hasKeys() ? digital() : null;
-  const p = premise();
-  const ac = analogConclusion();
-  const dc = digitalConclusion();
-  return `<aside class="rail">
-    <div class="card">
-      <h4>分析条件</h4>
-      <div class="kv"><span>攻击模型</span><b class="${state.attack === "被动窃听" ? "ok" : "bad"}">${esc(state.attack)}</b></div>
-      <div class="kv"><span>环境</span><b>${esc(state.env)}</b></div>
-      <div class="kv"><span>移动状态</span><b>${esc(state.motion)}</b></div>
-      <div class="kv"><span>RIS</span><b>${esc(state.ris)}</b></div>
-      <div class="kv"><span>协商信道</span><b class="${state.channel === "已认证" ? "ok" : "bad"}">${esc(state.channel)}</b></div>
-    </div>
-    <div class="card">
-      <h4>Eve 掌握的信息</h4>
-      <div class="check ${state.eveObs ? "on" : ""}"><i>✓</i>信道观测</div>
-      <div class="check ${state.eveQuant ? "on" : ""}"><i>✓</i>公开量化规则</div>
-      <div class="check ${state.eveOther ? "on" : ""}"><i>✓</i>其他侧信息</div>
-    </div>
-    <div class="card">
-      <h4>两域结论</h4>
-      <div class="kv"><span>模拟域</span><b class="${ac ? ac.tone : ""}">${ac ? esc(ac.short) : "—"}</b></div>
-      <div class="kv"><span>数字域</span><b class="${dc ? dc.tone : ""}">${dc ? esc(dc.short) : "—"}</b></div>
-      <p style="margin:8px 0 0;font-size:13px;color:#6b7280;line-height:1.5">${esc(p.note)}</p>
-    </div>
-    <div class="card">
-      <h4>数据状态</h4>
-      <div class="kv"><span>重叠时长</span><b>${A ? `${A.common.length} s` : "—"}</b></div>
-      <div class="kv"><span>重叠比例</span><b class="${A && A.ratio >= 0.5 ? "ok" : "warn"}">${A ? pct(A.ratio) : "—"}</b></div>
-      <div class="kv"><span>采集时长</span><b>${A ? `${A.span} s` : "—"}</b></div>
-      <div class="kv"><span>密钥</span><b>${d ? `${num(d.nBits)} bit` : "—"}</b></div>
-      <div class="kv"><span>双方密钥</span><b class="${d ? (d.same ? "ok" : "bad") : ""}">${d ? (d.same ? "完全一致" : "不一致") : "—"}</b></div>
-    </div>
-  </aside>`;
-}
-
-function pageBody() {
-  switch (state.page) {
-    case "scene": return pageScene();
-    case "import": return pageImport();
-    case "analog": return pageAnalog();
-    case "digital": return pageDigital();
-    case "recon": return pageRecon();
-    case "report": return pageReport();
-    default: return pageScene();
-  }
-}
-
-function render() {
-  document.getElementById("app").innerHTML = `<div class="app">${topbar()}${sidebar()}<main class="main">${pageBody()}</main>${rail()}</div>`;
-  typeset();
-  if (state.scrollFit) {
-    state.scrollFit = false;
-    const el = document.getElementById("fit-section");
-    if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
-  }
-  if (state.toast) {
-    const t = document.createElement("div");
-    t.className = "toast";
-    t.textContent = state.toast;
-    document.body.appendChild(t);
-    const msg = state.toast;
-    state.toast = "";
-    setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
-  }
-}
-
-/* ============================================================
-   18. 交互
-   ============================================================ */
-
-function toast(msg) {
-  state.toast = msg;
-  render();
-}
 
 document.addEventListener("change", (e) => {
   const el = e.target;
-  if (el.dataset && el.dataset.field) {
+  if (!el.dataset) return;
+  if (el.dataset.field) {
     const k = el.dataset.field;
     if (el.type === "checkbox") state[k] = el.checked;
-    else if (el.type === "number" || el.type === "range") {
+    else if (el.type === "number") {
       const v = Number(el.value);
       state[k] = Number.isFinite(v) ? v : 0;
     } else state[k] = el.value;
     render();
     return;
   }
-  if (el.id === "file-input") {
-    const files = [...el.files];
-    el.value = "";
-    if (files.length) importFiles(files).then(render);
-  }
+  if (el.dataset.act === "ris") { state.risOn = el.checked; render(); return; }
+  if (el.dataset.act === "jam") { state.jamOn = el.checked; render(); return; }
 });
 
-document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-act]");
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-act],[data-tab],[data-jump]");
   if (!el) return;
   const act = el.dataset.act;
-  if (act === "goto") {
-    state.page = el.dataset.page;
-    render();
-    window.scrollTo({ top: 0 });
-  } else if (act === "check") {
-    const id = el.dataset.check;
-    state.checkOpen = state.checkOpen === id ? null : id;
-    render();
-  } else if (act === "nist") {
-    const nid = el.dataset.id;
-    state.nistOpen = state.nistOpen === nid ? null : nid;
-    render();
-  } else if (act === "set-L") {
-    const v = Number(el.dataset.l);
-    if (Number.isFinite(v) && v > 0) state.L = v;
-    render();
-  } else if (act === "pick") {
-    pickFiles(el.dataset.slot);
-  } else if (act === "pick-dir") {
-    pickDir();
-  } else if (act === "load-sample") {
-    loadSample()
-      .then(() => { state.scrollFit = true; render(); })
-      .catch(() => toast("示例载入失败：请用本地 HTTP 服务打开页面"));
-  } else if (act === "load-synth") {
-    loadSynth();
-  } else if (act === "clear") {
-    state.slots = {};
-    state.synthetic = false;
-    invalidate();
-    render();
-  } else if (act === "export") {
-    exportJson();
-  } else if (act === "print") {
-    window.print();
-  } else if (act === "save-history") {
+
+  if (el.dataset.tab) { state.tab = el.dataset.tab; render(); return; }
+  if (el.dataset.jump) { state.tab = el.dataset.jump; render(); return; }
+
+  if (act === "seg") { state.seg = el.dataset.seg; render(); return; }
+  if (act === "set-L") { state.L = Number(el.dataset.l) || state.L; render(); return; }
+  if (act === "play") { state.playing = !state.playing; render(); return; }
+  if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
+  if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
+  if (act === "clear") {
+    state.slots = {}; state.synthetic = false; invalidate(); render(); return;
+  }
+  if (act === "load-sample") { await loadSample(); render(); return; }
+  if (act === "load-synth") { loadSynth(); render(); return; }
+  if (act === "pick-dir") { pickDir(); return; }
+  if (act === "pick") { pickFiles(el.dataset.slot); return; }
+  if (act === "export") { exportJson(); return; }
+  if (act === "print") { window.print(); return; }
+  if (act === "save-history") {
     const ac = analogConclusion();
     const dc = digitalConclusion();
     state.history.unshift({
@@ -2372,6 +2021,7 @@ document.addEventListener("click", (e) => {
     });
     state.history = state.history.slice(0, 8);
     render();
+    return;
   }
 });
 
@@ -2384,7 +2034,6 @@ function pickFiles(slotId) {
     if (!f) return;
     state.slots[slotId] = await loadSlot(slotId, f);
     invalidate();
-    state.scrollFit = true;
     render();
   });
   input.click();
@@ -2404,6 +2053,21 @@ function pickDir() {
   input.click();
 }
 
+function budget() {
+  const n = Math.max(1, Math.round(Number(state.pN) || 0));
+  const rate = Math.min(0.99, Math.max(0.05, Number(state.pRate) || 0.75));
+  const leak = state.pLeakMode === "rate"
+    ? Math.round(n * (1 - rate))
+    : Math.round(Number(state.pActualPublic) || 0);
+  const other = Math.round(Number(state.pOther) || 0);
+  const pa = Math.round(Number(state.pPa) || 0);
+  const auth = Math.round(Number(state.pAuthBits) || 0);
+  const hmin = Math.round(Number(state.pHmin) || 0);
+  const spent = leak + other + pa + auth;
+  const raw = hmin - spent;
+  return { n, rate, leak, other, pa, auth, hmin, spent, raw, safe: Math.max(0, raw) };
+}
+
 function exportJson() {
   const p = premise();
   const ac = analogConclusion();
@@ -2412,17 +2076,15 @@ function exportJson() {
   const u = hasAnalog() ? estimateUL(state.L) : null;
   const d = hasKeys() ? digital() : null;
   const t = nist();
+  const b = budget();
   const conclusionOf = (c) => (c ? {
-    label: c.label,
-    statement: c.text,
-    note: c.note,
+    label: c.label, statement: c.text, note: c.note,
     metrics: c.rows.map((r) => ({ name: r.k, value: r.v, rule: r.rule, verdict: r.verdict })),
   } : null);
   const payload = {
     generatedAt: new Date().toISOString(),
     scope: {
-      env: state.env, motion: state.motion, ris: state.ris,
-      attack: state.attack, channel: state.channel,
+      env: state.env, motion: state.motion, ris: state.ris, attack: state.attack, channel: state.channel,
       feature: state.feature, csiUse: state.csiUse,
       eve: { channelObservation: state.eveObs, quantizationRule: state.eveQuant, otherSideInfo: state.eveOther },
     },
@@ -2430,46 +2092,28 @@ function exportJson() {
     conclusions: { analog: conclusionOf(ac), digital: conclusionOf(dc) },
     alignment: s.align ? { commonSeconds: s.align.common.length, ratio: s.align.ratio, spanSeconds: s.align.span, gap: s.align.gap } : null,
     analog: u ? {
-      blockSeconds: u.L, blocks: u.n,
-      estimator: "E2 块均值 + 偏相关",
-      assumptions: ["联合高斯", "块均值代表块内信息（低估）", "块间独立（近似）"],
-      conditionalMI_bitsPerSecond: u.base.U,
-      conditionalMI_ci90: u.ciU,
-      mutualInfoDifference_bitsPerSecond: u.base.D,
-      mutualInfoDifference_raw: u.base.raw,
+      blockSeconds: u.L, blocks: u.n, estimator: "E2 块均值 + 偏相关",
+      conditionalMI_bitsPerSecond: u.base.U, conditionalMI_ci90: u.ciU,
+      mutualInfoDifference_bitsPerSecond: u.base.D, mutualInfoDifference_raw: u.base.raw,
       partialCorrelation: u.base.pxy,
     } : null,
     digital: d ? {
-      bits: d.nBits, lines: d.lines, width: d.width,
-      identicalLegalEnds: d.same, kdr: d.kdr,
-      biasP1: d.p1,
-      groups: Object.fromEntries(BS.map((b) => [b, { groups: d.groups[b].nb, states: d.groups[b].states, ratio: d.groups[b].ratio, hmin: d.groups[b].hmin }])),
+      bits: d.nBits, lines: d.lines, width: d.width, identicalLegalEnds: d.same, kdr: d.kdr, biasP1: d.p1,
+      groups: Object.fromEntries(BS.map((bb) => [bb, { groups: d.groups[bb].nb, states: d.groups[bb].states, ratio: d.groups[bb].ratio, hmin: d.groups[bb].hmin }])),
       note: "密钥为隐私放大输出，条件最小熵不可估计",
     } : null,
     randomTests: t ? { n: t.n, passed: t.passed, judged: t.judged.length, rows: t.rows.map((r) => ({ name: r.name, p: r.p, verdict: r.note })) } : null,
-    budget: (() => {
-      const b = budget();
-      return {
-        assumed: true,
-        rawBits: b.n,
-        codeRate: b.rate,
-        leakMode: state.pLeakMode,
-        publicLeakBits: b.leak,
-        otherPublicBits: b.other,
-        paMarginBits: b.pa,
-        authBits: b.auth,
-        assumedHminBits: b.hmin,
-        safeLengthBits: b.safe,
-        actualBits: d ? d.nBits : null,
-        feasible: d ? b.raw >= 0 && d.nBits <= b.safe : null,
-      };
-    })(),
+    budget: {
+      assumed: true, rawBits: b.n, codeRate: b.rate, publicLeakBits: b.leak, otherPublicBits: b.other,
+      paMarginBits: b.pa, authBits: b.auth, assumedHminBits: b.hmin, safeLengthBits: b.safe,
+      actualBits: d ? d.nBits : null, feasible: d ? b.raw >= 0 && d.nBits <= b.safe : null,
+    },
     synthetic: state.synthetic,
     safetyLengthLowerBound: null,
     warnings: [
       "结论分模拟域与数字域分别给出，不支持合并为单一安全等级",
       "熵与协议参数为假设输入，不是实测值",
-      "模拟域结论依赖联合高斯、块均值、块间独立三项假设，块均值方向上低估信息量",
+      "模拟域结论依赖联合高斯、块均值、块间独立三项假设",
       "随机性检验与 KDR 只排除统计异常，不能证明密钥对 Eve 保密",
       "缺少隐私放大前基线，无法估计条件最小熵 H_min(K|E)",
     ],
@@ -2483,105 +2127,33 @@ function exportJson() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-/* ---------- 图表悬浮读数 ---------- */
-function hideChartHover(box) {
-  if (!box) return;
-  const g = box.querySelector(".hv");
-  if (g) g.style.opacity = "0";
-  const tip = box.querySelector(".chart-tip");
-  if (tip) tip.hidden = true;
-}
-
-function updateChartHover(box, clientX) {
-  const svg = box.querySelector("svg");
-  const tip = box.querySelector(".chart-tip");
-  const g = box.querySelector(".hv");
-  if (!svg || !tip || !g) return;
-  let meta;
-  try { meta = JSON.parse(svg.dataset.meta || ""); } catch (err) { return; }
-  if (!meta || !meta.xs || !meta.series) return;
-  const rect = svg.getBoundingClientRect();
-  if (!rect.width) return;
-
-  const { pad, xs, yMin, yMax, h } = meta;
-  const iw = meta.w - pad.l - pad.r;
-  const ih = h - pad.t - pad.b;
-  const xAt = (i) => pad.l + (xs.length <= 1 ? 0 : (i / (xs.length - 1)) * iw);
-  const yAt = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
-  const vx = ((clientX - rect.left) / rect.width) * meta.w;
-
-  let best = 0;
-  let bestD = Infinity;
-  for (let i = 0; i < xs.length; i++) {
-    const d = Math.abs(xAt(i) - vx);
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  const cx = xAt(best);
-
-  const line = svg.querySelector(".hv-line");
-  if (line) { line.setAttribute("x1", cx); line.setAttribute("x2", cx); }
-  svg.querySelectorAll(".hv-dot").forEach((dot) => {
-    const s = meta.series[Number(dot.dataset.k)];
-    const v = s ? s.ys[best] : null;
-    if (v == null || !Number.isFinite(v)) { dot.style.opacity = "0"; return; }
-    dot.style.opacity = "1";
-    dot.setAttribute("cx", cx);
-    dot.setAttribute("cy", yAt(v));
-  });
-  g.style.opacity = "1";
-
-  tip.innerHTML = `<div class="tip-head">滞后 ${xs[best]} 秒</div>` + meta.series.map((s) => {
-    const v = s.ys[best];
-    return `<div class="tip-row"><i style="background:${s.color}"></i><span>${s.name}</span><b>${v == null || !Number.isFinite(v) ? "—" : v.toFixed(3)}</b></div>`;
-  }).join("");
-  tip.hidden = false;
-
-  const boxRect = box.getBoundingClientRect();
-  const offset = rect.left - boxRect.left;
-  const half = tip.offsetWidth / 2;
-  const leftPx = offset + (cx / meta.w) * rect.width;
-  tip.style.left = `${Math.max(half + 2, Math.min(boxRect.width - half - 2, leftPx))}px`;
-  tip.style.top = "2px";
-}
-
-document.addEventListener("mousemove", (e) => {
-  const t = e.target;
-  const svg = t && t.closest ? t.closest("svg") : null;
-  const box = svg ? svg.closest(".chart-interactive") : null;
-  if (box) { updateChartHover(box, e.clientX); return; }
-  document.querySelectorAll(".chart-interactive").forEach((b) => {
-    const tip = b.querySelector(".chart-tip");
-    if (tip && !tip.hidden) hideChartHover(b);
-  });
-});
-
-document.documentElement.addEventListener("mouseleave", () => {
-  document.querySelectorAll(".chart-interactive").forEach(hideChartHover);
-});
-
 /* ============================================================
-   19. 启动
+   16. 启动
    ============================================================ */
 
 (function boot() {
   const params = new URLSearchParams(location.search);
-  const page = params.get("page");
-  if (page === "fit") state.page = "import";
-  else if (page === "tests") state.page = "digital";
-  else if (PAGES.some((p) => p.id === page)) state.page = page;
-  const chk = params.get("check");
-  if (chk) state.checkOpen = chk;
+  const t = params.get("tab") || params.get("page");
+  const map = {
+    home: "home", scene: "input", import: "input", input: "input",
+    analog: "results", digital: "results", recon: "results", results: "results", tests: "results",
+    report: "report",
+  };
+  if (t && map[t]) state.tab = map[t];
+  if (t === "analog") state.seg = "analog";
+  if (t === "digital" || t === "tests") state.seg = "digital";
+  if (t === "recon" || t === "fit") state.seg = "final";
+  if (t === "fit") state.tab = "input";
+  const sg = params.get("seg");
+  if (sg === "analog" || sg === "digital" || sg === "final") state.seg = sg;
   const lq = Number(params.get("L"));
-  const pinL = Number.isFinite(lq) && lq > 0 ? lq : null;
+  if (Number.isFinite(lq) && lq > 0) state.L = lq;
   if (params.get("synth") === "1") {
     loadSynth();
   } else if (params.get("demo") === "1") {
-    loadSample()
-      .then(() => { render(); })
-      .catch(() => { render(); });
+    loadSample().then(() => render()).catch(() => render());
   } else {
     render();
     probeSample();
   }
-  if (pinL) { state.L = pinL; render(); }
 })();
