@@ -2848,14 +2848,11 @@ function pageReport() {
 
 function topbar() {
   const p = premise();
-  const d = hasKeys() ? digital() : null;
   return `<header class="topbar">
     <div class="brand"><span class="mark">${ico("tower", 18)}</span>物理层密钥安全评估</div>
     <div class="top-meta">
-      <span>项目：城市无线测评</span><span class="sep">｜</span>
       ${state.synthetic ? `<span class="badge synth">合成演示数据</span>` : ""}
       <span class="badge ${p.tone === "bad" ? "bad" : ""}"><i class="dot"></i>${esc(state.attack)} · 信道${esc(state.channel)}</span>
-      ${d ? `<span class="badge">${num(d.nBits)} bit</span>` : ""}
     </div>
   </header>`;
 }
