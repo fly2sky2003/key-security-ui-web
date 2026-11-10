@@ -1724,7 +1724,7 @@ function segAnalog() {
   <p class="card-subnote">点表格行切换当前块长；当前 L = ${state.L} 秒${rec ? `，建议块长 ${rec.L} 秒` : ""}。</p>`, tag(`L = ${state.L} 秒`, "info"))}
 
   ${card("信息量估计", `<div class="stats">
-    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", u && u.ciU ? `90% CI ${fx(u.ciU.lo, 3)}–${fx(u.ciU.hi, 3)}` : "样本不足", u && u.ok ? "info" : "mute")}
+    ${stat("块条件互信息 U_L", u ? `${fx(u.base.U, 3)} <small>bit/s</small>` : "—", u ? (u.ok ? "样本充分" : "样本不足") : "无法估计", u && u.ok ? "info" : "mute")}
     ${stat("互信息差 D_L", u && u.base.D != null ? `${fx(u.base.D, 3)} <small>bit/s</small>` : "—", u && u.base.D != null ? `截断前 ${fx(u.base.raw, 3)}` : "缺 Eve 数据", u && u.base.D > 0 ? "info" : "mute")}
     ${stat("块数", u ? num(u.n) : "—", u ? `每块 ${u.perBlock} 个观测` : "—", "mute")}
     ${stat("平稳性", st ? st.level : "—", st ? `${fx(st.dMu, 2)}σ / ${fx(st.F, 2)}` : "—", st ? st.tone : "mute")}
