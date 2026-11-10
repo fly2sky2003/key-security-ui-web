@@ -1645,33 +1645,33 @@ function pageHome() {
     <div class="generation-step">${ico("key", 26)}<div class="step-label">隐私放大</div><div class="step-output">最终密钥</div></div>
   </div>`)}
 
-  ${card("评估流程", `<div class="flow-table">
-    <div class="flow-head">
-      <span>阶段</span><span>输入</span><span>适用性检查</span><span class="col-math">评估方法</span><span class="col-out">输出</span>
-    </div>
-    <div class="flow-row">
-      <span class="flow-stage">模拟域</span>
-      <span>三方信道特征</span>
-      <span>时序依赖 · 样本规模</span>
-      <span class="math">${tex("I(X^{L};Y^{L}\\mid Z^{L})/L")}</span>
-      <span class="out">源信息量参考</span>
-    </div>
-    <div class="flow-row">
-      <span class="flow-stage">数字域</span>
-      <span>原始比特 · Eve 侧信息</span>
-      <span>块依赖 · 概率支持</span>
-      <span class="math">${tex("H_{\\min}(K\\mid E)")}</span>
-      <span class="out">秘密熵下界</span>
-    </div>
-    <div class="flow-row">
-      <span class="flow-stage">最终密钥</span>
-      <span>调和记录 · 放大参数</span>
-      <span>熵下界 · 泄露记录</span>
-      <span class="math">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span>
-      <span class="out">安全长度 · 净速率</span>
-    </div>
-  </div>`)}
-
+  ${card("评估流程", `<table class="flow">
+    <colgroup><col style="width:15%"><col style="width:21%"><col style="width:24%"><col style="width:26%"><col style="width:14%"></colgroup>
+    <thead><tr><th>阶段</th><th>输入</th><th>适用性检查</th><th>评估方法</th><th>输出</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="flow-stage"><span class="flow-idx">01</span>模拟域</td>
+        <td>三方信道特征</td>
+        <td class="flow-check">时序依赖 · 样本规模</td>
+        <td><span class="flow-formula">${tex("I(X^{L};Y^{L}\\mid Z^{L})/L")}</span></td>
+        <td><span class="flow-out">源信息量参考</span></td>
+      </tr>
+      <tr>
+        <td class="flow-stage"><span class="flow-idx">02</span>数字域</td>
+        <td>原始比特 · Eve 侧信息</td>
+        <td class="flow-check">块依赖 · 概率支持</td>
+        <td><span class="flow-formula">${tex("H_{\\min}(K\\mid E)")}</span></td>
+        <td><span class="flow-out">秘密熵下界</span></td>
+      </tr>
+      <tr>
+        <td class="flow-stage"><span class="flow-idx">03</span>最终密钥</td>
+        <td>调和记录 · 放大参数</td>
+        <td class="flow-check">熵下界 · 泄露记录</td>
+        <td><span class="flow-formula">${tex("\\ell\\le H_{\\min}^{\\varepsilon}-\\lambda-\\Delta")}</span></td>
+        <td><span class="flow-out">安全长度 · 净速率</span></td>
+      </tr>
+    </tbody>
+  </table>`)}
   <div class="cta">
     <div class="cta-text">
       <h3>准备一次新的评估</h3>

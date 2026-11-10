@@ -696,38 +696,57 @@ main > *:nth-child(8) { animation-delay: 280ms; }
 .scene.is-paused .ris-cell,
 .scene.is-paused .antenna-dot { animation-play-state: paused; }
 /* ============================================================
-   评估流程表 + 底部 CTA（总览）
+   评估流程表（总览）
    ============================================================ */
-.flow-table { margin: 2px 0 0; }
-.flow-head, .flow-row {
-  display: grid;
-  grid-template-columns: 92px repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  align-items: center;
+table.flow { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.flow th {
+  font: 600 13px/1.4 var(--font-ui);
+  color: var(--muted);
+  text-align: left;
+  letter-spacing: 0;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
 }
-.flow-head { padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
-.flow-head span { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; }
-.flow-head .col-math { text-align: center; }
-.flow-head .col-out { text-align: right; }
-.flow-head > span:first-child { padding-left: 11px; }
-.flow-row { padding: 13px 12px; border-bottom: 1px solid var(--line); transition: background var(--t-fast); }
-.flow-row:last-child { border-bottom: 0; }
-.flow-row:hover { background: var(--paper-2); }
-.flow-stage { font-weight: 650; color: var(--blue); display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
-.flow-stage::before {
-  content: ""; width: 3px; height: 14px; border-radius: 2px; flex: none;
-  background: linear-gradient(180deg, var(--blue), var(--cyan));
+table.flow td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  font-size: 14px;
+  text-align: left;
 }
-.flow-row > span { font-size: 13.5px; }
-.flow-row .math { text-align: center; }
-.flow-row .out {
-  justify-self: end; text-align: right; color: var(--blue); font-weight: 600;
-  background: var(--pale); border-radius: 4px; padding: 5px 12px; white-space: nowrap;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 168, 0.10);
+table.flow tr:last-child td { border-bottom: 0; }
+table.flow tbody tr { transition: background var(--t-fast); }
+table.flow tbody tr:hover td { background: var(--paper-2); }
+table.flow td.flow-stage { font-weight: 650; color: var(--blue); white-space: nowrap; }
+.flow-idx {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; margin-right: 9px;
+  border-radius: 6px; font: 600 11px/1 var(--font-num);
+  color: var(--blue); background: var(--pale);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 168, 0.16);
+  vertical-align: -2px;
 }
-.generation-step svg { margin-bottom: 10px; }
-.quant-bits { letter-spacing: 0.14em; transition: opacity var(--t-fast); }
-
+table.flow td.flow-check { color: var(--muted); font-size: 13.5px; }
+.flow-formula {
+  display: inline-block;
+  padding: 4px 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.flow-out {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: var(--pale);
+  color: var(--blue);
+  font-weight: 600;
+  font-size: 13.5px;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 168, 0.12);
+}
 /* 底部 CTA */
 .cta {
   display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: wrap;
@@ -761,4 +780,9 @@ main > *:nth-child(8) { animation-delay: 280ms; }
   .flow-row .math { text-align: left; }
   .flow-row .out { text-align: left; }
   .cta { padding: 20px; }
+}
+/* 量化数字 & 窄屏流程表 */
+.quant-bits { letter-spacing: 0.14em; }
+@media (max-width: 760px) {
+  .flow { display: block; overflow-x: auto; white-space: nowrap; }
 }
