@@ -319,6 +319,7 @@ async function loadSample() {
     if (!manRes.ok) throw new Error("manifest");
     const man = await manRes.json();
     const sessions = Array.isArray(man.sessions) ? man.sessions : [];
+    const bust = man.generatedAt ? `?v=${encodeURIComponent(man.generatedAt)}` : "";
     const rounds = [];
     for (const s of sessions) {
       const base = `${SESSION_ROOT}/${s.ts}`;
@@ -326,7 +327,7 @@ async function loadSample() {
       await Promise.all(SLOTS.map(async (slot) => {
         const rel = (s.files || {})[slot.id];
         if (!rel) return;
-        const r = await fetch(`${base}/${rel}`);
+        const r = await fetch(`${base}/${rel}${bust}`, { cache: "no-store" });
         if (!r.ok) return;
         const text = await r.text();
         const parsed = slot.kind === "csi" ? parseCsi(text) : parseKey(text);
