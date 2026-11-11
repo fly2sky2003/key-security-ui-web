@@ -313,12 +313,8 @@ function probeSample() {
 }
 
 async function loadSample() {
-  if (state.sampleAvailable === false) {
-    state.tab = "input";
-    toast("本站未附带实测数据 —— 请用「载入合成演示」或上传自己的 CSV / TXT");
-    return;
-  }
   try {
+
     const manRes = await fetch(`${SAMPLE_MANIFEST}`, { cache: "no-store" });
     if (!manRes.ok) throw new Error("manifest");
     const man = await manRes.json();
@@ -2504,7 +2500,7 @@ function pageInput() {
   ${card("数据", `
     <div class="btn-row" style="margin-bottom:14px">
       <button class="btn primary" data-act="pick-dir">${ico("folder", 14)} 选择会话文件夹</button>
-      ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入实测数据</button>`}
+      <button class="btn" data-act="load-sample">载入实测数据</button>
       <button class="btn" data-act="load-synth">载入合成演示（4 轮）</button>
       <button class="btn ghost" data-act="clear">清空全部</button>
     </div>
