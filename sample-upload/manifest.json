@@ -1,0 +1,152 @@
+{
+  "generatedAt": "2026-11-11T02:42:34.369Z",
+  "maxSec": 240,
+  "subcarriers": 8,
+  "sessions": [
+    {
+      "ts": "20260915_161933",
+      "day": "20260915",
+      "label": "2026-09-15 16:19",
+      "files": {
+        "ueCsi": "UE_PDsch_DMRS_20260915_161933.csv",
+        "nbCsi": "PUSCH_PUsch_DMRS_20260915_161933.csv",
+        "eveCsi": "EVE_PEsch_DMRS_20260915_161934.csv",
+        "ueKey": "UE_UE_key_20260915_161933.txt",
+        "nbKey": "PUSCH_UE_key_20260915_161933.txt",
+        "eveKey": "EVE_EVE_key_20260915_161933.txt"
+      },
+      "keyMatch": {
+        "ue": 1,
+        "nb": 0,
+        "eve": 1
+      },
+      "rows": {
+        "ue": 6838,
+        "nb": 11910,
+        "eve": 2081
+      },
+      "seconds": {
+        "ue": 174,
+        "nb": 172,
+        "eve": 174
+      },
+      "bytes": 2543061
+    },
+    {
+      "ts": "20260915_155935",
+      "day": "20260915",
+      "label": "2026-09-15 15:59",
+      "files": {
+        "ueCsi": "UE_PDsch_DMRS_20260915_155935.csv",
+        "nbCsi": "PUSCH_PUsch_DMRS_20260915_155934.csv",
+        "eveCsi": "EVE_PEsch_DMRS_20260915_155935.csv",
+        "ueKey": "UE_UE_key_20260915_155935.txt",
+        "nbKey": "PUSCH_UE_key_20260915_155935.txt",
+        "eveKey": "EVE_EVE_key_20260915_155935.txt"
+      },
+      "keyMatch": {
+        "ue": 0,
+        "nb": 1,
+        "eve": 0
+      },
+      "rows": {
+        "ue": 8709,
+        "nb": 10718,
+        "eve": 2811
+      },
+      "seconds": {
+        "ue": 241,
+        "nb": 241,
+        "eve": 241
+      },
+      "bytes": 2723634
+    },
+    {
+      "ts": "20260917_161610",
+      "day": "20260917",
+      "label": "2026-09-17 16:16",
+      "files": {
+        "ueCsi": "UE_PDsch_DMRS_20260917_161610.csv",
+        "nbCsi": "PUSCH_PUsch_DMRS_20260917_161610.csv",
+        "eveCsi": "EVE_PEsch_DMRS_20260917_161610.csv",
+        "ueKey": "UE_UE_key_20260917_161610.txt",
+        "nbKey": "PUSCH_UE_key_20260917_161610.txt",
+        "eveKey": "EVE_EVE_key_20260917_161610.txt"
+      },
+      "keyMatch": {
+        "ue": 0,
+        "nb": 0,
+        "eve": 0
+      },
+      "rows": {
+        "ue": 8027,
+        "nb": 9354,
+        "eve": 5367
+      },
+      "seconds": {
+        "ue": 241,
+        "nb": 241,
+        "eve": 241
+      },
+      "bytes": 2851023
+    },
+    {
+      "ts": "20261008_101649",
+      "day": "20261008",
+      "label": "2026-10-08 10:16",
+      "files": {
+        "ueCsi": "UE_PDsch_DMRS_20261008_101649.csv",
+        "nbCsi": "PUSCH_PUsch_DMRS_20261008_101649.csv",
+        "eveCsi": "EVE_PEsch_DMRS_20261008_101649.csv",
+        "ueKey": "UE_UE_key_20261008_101649.txt",
+        "nbKey": "PUSCH_UE_key_20261008_101649.txt",
+        "eveKey": "EVE_EVE_key_20261008_101649.txt"
+      },
+      "keyMatch": {
+        "ue": 0,
+        "nb": 0,
+        "eve": 0
+      },
+      "rows": {
+        "ue": 3514,
+        "nb": 1977,
+        "eve": 1862
+      },
+      "seconds": {
+        "ue": 189,
+        "nb": 188,
+        "eve": 193
+      },
+      "bytes": 934540
+    },
+    {
+      "ts": "20260915_173432",
+      "day": "20260915",
+      "label": "2026-09-15 17:34",
+      "files": {
+        "ueCsi": "UE_PDsch_DMRS_20260915_173432.csv",
+        "nbCsi": "PUSCH_PUsch_DMRS_20260915_173432.csv",
+        "eveCsi": "EVE_PEsch_DMRS_20260915_173433.csv",
+        "ueKey": "UE_UE_key_20260915_173432.txt",
+        "nbKey": "PUSCH_UE_key_20260915_173432.txt",
+        "eveKey": "EVE_EVE_key_20260915_173432.txt"
+      },
+      "keyMatch": {
+        "ue": 0,
+        "nb": 0,
+        "eve": 1
+      },
+      "rows": {
+        "ue": 5531,
+        "nb": 17234,
+        "eve": 4857
+      },
+      "seconds": {
+        "ue": 241,
+        "nb": 241,
+        "eve": 241
+      },
+      "bytes": 3362106
+    }
+  ]
+}

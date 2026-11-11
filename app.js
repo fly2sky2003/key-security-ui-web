@@ -4,7 +4,9 @@
    0. 常量
    ============================================================ */
 
-const SESSION_DIR = "sample-upload/20261008_101649";
+const SESSION_ROOT = "sample-upload";
+const SESSION_DIR = `${SESSION_ROOT}/20261008_101649`;
+const SAMPLE_MANIFEST = `${SESSION_ROOT}/manifest.json`;
 
 const SLOTS = [
   { id: "ueCsi", party: "ue", kind: "csi", title: "UE 信道", hint: "CSV", file: `${SESSION_DIR}/UE_PDsch_DMRS_20261008_101649.csv` },
@@ -313,38 +315,42 @@ function probeSample() {
 async function loadSample() {
   if (state.sampleAvailable === false) {
     state.tab = "input";
-    toast("本站是公开演示版，未附带实测数据 —— 请用「载入合成演示」或上传自己的 CSV / TXT");
+    toast("本站未附带实测数据 —— 请用「载入合成演示」或上传自己的 CSV / TXT");
     return;
   }
   try {
-    const res = await Promise.all(
-      SLOTS.map(async (s) => {
-        const r = await fetch(s.file);
-        if (!r.ok) throw new Error(s.file);
-        return [s, await r.text()];
-      })
-    );
-    const slots = {};
-    for (const [s, text] of res) {
-      const parsed = s.kind === "csi" ? parseCsi(text) : parseKey(text);
-      slots[s.id] = { ...parsed, name: s.file.split("/").pop(), size: text.length };
+    const manRes = await fetch(`${SAMPLE_MANIFEST}`, { cache: "no-store" });
+    if (!manRes.ok) throw new Error("manifest");
+    const man = await manRes.json();
+    const sessions = Array.isArray(man.sessions) ? man.sessions : [];
+    const rounds = [];
+    for (const s of sessions) {
+      const base = `${SESSION_ROOT}/${s.ts}`;
+      const slots = {};
+      await Promise.all(SLOTS.map(async (slot) => {
+        const rel = (s.files || {})[slot.id];
+        if (!rel) return;
+        const r = await fetch(`${base}/${rel}`);
+        if (!r.ok) return;
+        const text = await r.text();
+        const parsed = slot.kind === "csi" ? parseCsi(text) : parseKey(text);
+        if (parsed.ok) slots[slot.id] = { ...parsed, name: rel, size: text.length };
+      }));
+      if (SLOTS.some((sl) => slots[sl.id] && slots[sl.id].ok)) {
+        rounds.push({ id: newRoundId(), detail: s.label || s.ts, source: "sample", slots });
+      }
     }
+    if (!rounds.length) throw new Error("empty");
     state.sampleAvailable = true;
-    const prev = state.rounds.findIndex((r) => r.source === "sample");
-    const round = {
-      id: prev >= 0 ? state.rounds[prev].id : newRoundId(),
-      detail: "2026-10-08 会话",
-      source: "sample",
-      slots,
-    };
-    if (prev >= 0) state.rounds[prev] = round;
-    else state.rounds.push(round);
-    setActive(prev >= 0 ? prev : state.rounds.length - 1);
+    state.rounds = [...state.rounds.filter((r) => r.source !== "sample" && r.source !== "synthetic"), ...rounds];
+    setActive(state.rounds.length - rounds.length);
+    state.synthetic = false;
+    toast(`已载入 ${rounds.length} 轮实测数据`);
   } catch (e) {
     state.sampleAvailable = false;
     state.tab = "input";
     invalidate();
-    toast("实测示例数据未随本站发布 —— 请载入合成演示，或上传自己的 CSV / TXT");
+    toast("实测数据未随本站发布 —— 请载入合成演示，或上传自己的 CSV / TXT");
   }
 }
 
@@ -2498,7 +2504,7 @@ function pageInput() {
   ${card("数据", `
     <div class="btn-row" style="margin-bottom:14px">
       <button class="btn primary" data-act="pick-dir">${ico("folder", 14)} 选择会话文件夹</button>
-      ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入真实示例</button>`}
+      ${state.sampleAvailable === false ? "" : `<button class="btn" data-act="load-sample">载入实测数据</button>`}
       <button class="btn" data-act="load-synth">载入合成演示（4 轮）</button>
       <button class="btn ghost" data-act="clear">清空全部</button>
     </div>
