@@ -2403,14 +2403,16 @@ function obsPanels() {
       return pr && Number.isFinite(pr[k]) ? pr[k] : null;
     }),
   }));
-  const all = [];
-  cols.forEach((c) => c.ys.forEach((v) => { if (Number.isFinite(v)) all.push(v); }));
-  const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-  const pad = (hi - lo) * 0.1 || 1;
-  return `<div class="obs-grid">${cols.map((c, i) => `<div class="obs-panel">
-    <div class="obs-head"><i style="background:${c.color}"></i>${c.name}</div>
-    ${obsPanelSvg(c.ys, c.color, lo - pad, hi + pad, i === 0)}
-  </div>`).join("")}</div>`;
+  return `<div class="obs-grid">${cols.map((c) => {
+    const vals = c.ys.filter((v) => Number.isFinite(v));
+    const lo = vals.length ? Math.min.apply(null, vals) : 0;
+    const hi = vals.length ? Math.max.apply(null, vals) : 1;
+    const pad = (hi - lo) * 0.12 || Math.abs(hi || 1) * 0.05 || 1;
+    return `<div class="obs-panel">
+      <div class="obs-head"><i style="background:${c.color}"></i>${c.name}</div>
+      ${obsPanelSvg(c.ys, c.color, lo - pad, hi + pad, true)}
+    </div>`;
+  }).join("")}</div>`;
 }
 
 function renderObs() {
