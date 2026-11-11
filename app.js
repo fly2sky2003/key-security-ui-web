@@ -2275,7 +2275,12 @@ function digitalChecks() {
     { k: "密钥装载", rule: "十六进制 · 偶长度", actual: `${num(d.lines)} 行 × ${d.width}`, verdict: "通过", tone: "ok" },
     { k: "合法方 KDR", rule: "≤ 0.3", actual: d.kdr == null ? "—" : pct(d.kdr, 2), verdict: kdrOk ? "通过" : "偏高", tone: kdrOk ? "ok" : "bad" },
     { k: "统计识别性", rule: "样本/状态 ≥ 10", actual: fx(g8.ratio, 1), verdict: g8.marginalOk ? "可估" : "不足", tone: g8.marginalOk ? "ok" : "warn" },
-    { k: "条件最小熵", verdict: "不可计算", tone: "warn" },
+    (() => {
+      const pre = preStats();
+      return pre
+        ? { k: "条件最小熵", rule: `逐比特 ${fx(pre.perBit, 2)} bit`, actual: `${num(Math.round(pre.hmin))} bit`, verdict: "可计算", tone: "ok" }
+        : { k: "条件最小熵", verdict: "不可计算", tone: "warn" };
+    })(),
   ];
 }
 
