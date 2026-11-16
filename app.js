@@ -56,6 +56,7 @@ const state = {
   b: 8,
   scrollFit: false,
   checkOpen: null,
+  groupPick: null,
   nistOpen: null,
   synthetic: false,
   env: "室外",
@@ -522,6 +523,7 @@ function roundStats(r) {
       nBits: d ? d.nBits : null,
       lines: d ? d.lines : null,
       kdr: d ? d.kdr : null,
+      diff: d ? d.diff : null,
       checks: ac.length + dc.length,
       passed: ac.filter((x) => x.tone === "ok").length + dc.filter((x) => x.tone === "ok").length,
       hasAnalog: Boolean(A),
@@ -2752,9 +2754,16 @@ function waveThumb(A, n, w0, h0) {
   return `<svg class="r-wave" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="三方信道波形缩略图">${paths}</svg>`;
 }
 
-function groupLine(rows) {
+function groupLine(rows, pickedId) {
   if (!rows.length) return "";
   const pts = rows.map((r) => ({ ...r }));
+  const statusOf = (g) => {
+    if (!Number.isFinite(g.bits)) return "miss";
+    if (g.bits === 0) return "fail";
+    if (g.kdr != null && g.kdr !== 0) return "fail";
+    if (g.nist && g.nist.failed.length) return "fail";
+    return "ok";
+  };
   const vals = pts.map((p) => p.bits).filter((v) => Number.isFinite(v));
   if (!vals.length) return `<div class="r-empty">暂无可比较的组结果</div>`;
   const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
@@ -2771,6 +2780,7 @@ function groupLine(rows) {
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
   const x = (i) => pad.l + (pts.length <= 1 ? iw / 2 : (i / (pts.length - 1)) * iw);
   const y = (v) => pad.t + (1 - (v - y0) / (y1 - y0)) * ih;
+  const base = H - pad.b;
 
   let grid = "";
   for (let k = 0; k <= tickCount; k++) {
@@ -2791,21 +2801,38 @@ function groupLine(rows) {
     d += `${started ? "L" : "M"}${x(i).toFixed(1)},${y(p.bits).toFixed(1)}`;
     started = true;
   });
-  const base = (H - pad.b).toFixed(1);
   const area = d ? `<path d="${d}L${x(last).toFixed(1)},${base}L${x(first).toFixed(1)},${base}Z" fill="url(#rline)" stroke="none"/>` : "";
   const path = d ? `<path d="${d}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : "";
+
   const markers = pts.map((p, i) => {
     const cx = x(i).toFixed(1);
-    if (!Number.isFinite(p.bits)) {
-      return `<text x="${cx}" y="${pad.t - 6}" text-anchor="middle" font-size="12" fill="var(--faint)">未算出</text>`;
+    const st = statusOf(p);
+    const sel = p.id === pickedId ? " sel" : "";
+    const label = st === "ok" ? "成功" : st === "fail" ? "失败" : "缺失";
+    const tip = `第 ${p.id} 轮 · ${label}${Number.isFinite(p.bits) ? ` · ${num(p.bits)} bit` : ""}`;
+    if (st === "miss") {
+      const cy = (base - 12).toFixed(1);
+      return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" tabindex="0" role="button" aria-label="${tip}">
+        <title>${tip}</title>
+        <circle cx="${cx}" cy="${cy}" r="5" fill="var(--paper)" stroke="var(--faint)" stroke-width="2" stroke-dasharray="2 2"/>
+        <text x="${cx}" y="${(base - 26).toFixed(1)}" text-anchor="middle" font-size="12" fill="var(--faint)">未算出</text>
+      </g>`;
     }
-    const ok = p.kdr == null || p.kdr === 0;
-    const col = ok ? "var(--blue)" : "var(--red)";
-    return `<circle cx="${cx}" cy="${y(p.bits).toFixed(1)}" r="5" fill="${ok ? col : "var(--paper)"}" stroke="${col}" stroke-width="2"/>
-      <text x="${cx}" y="${(y(p.bits) - 12).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${num(p.bits)}</text>`;
+    const col = st === "ok" ? "var(--green)" : "var(--red)";
+    return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" tabindex="0" role="button" aria-label="${tip}">
+      <title>${tip}</title>
+      <circle cx="${cx}" cy="${y(p.bits).toFixed(1)}" r="5" fill="${col}" stroke="var(--paper)" stroke-width="2"/>
+      <text x="${cx}" y="${(y(p.bits) - 12).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${num(p.bits)}</text>
+    </g>`;
   }).join("");
 
-  return `<div class="r-line"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每组提取长度折线图">
+  const legend = `<div class="r-legend">
+    <span><i class="dot ok"></i>成功</span>
+    <span><i class="dot fail"></i>失败</span>
+    <span><i class="dot miss"></i>缺失</span>
+  </div>`;
+
+  return `<div class="r-line">${legend}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每组提取长度折线图，点击数据点查看原因">
     <defs><linearGradient id="rline" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="var(--blue)" stop-opacity="0.16"/>
       <stop offset="1" stop-color="var(--blue)" stop-opacity="0"/>
@@ -2813,6 +2840,17 @@ function groupLine(rows) {
     ${grid}${xs}${area}${path}${markers}
   </svg></div>`;
 }
+const _groupNistCache = new Map();
+function groupNistSummary(r) {
+  if (_groupNistCache.has(r.id)) return _groupNistCache.get(r.id);
+  const nt = withRound(r, () => {
+    const tt = nist();
+    return tt ? { passed: tt.passed, judged: tt.judged.length, failed: tt.judged.filter((z) => !z.pass).map((z) => z.name) } : null;
+  });
+  _groupNistCache.set(r.id, nt);
+  return nt;
+}
+
 const _preNistCache = new Map();
 function preNistRows() {
   const r = activeRound();
@@ -2955,18 +2993,56 @@ function pageReport() {
     .filter((x) => x.r.source === activeSource);
   const groups = sameSource.map((x) => {
     const s = roundStats(x.r);
-    return { id: x.i + 1, bits: s.nBits, kdr: s.kdr, span: s.span, hasKeys: s.hasKeys };
+    const nt = groupNistSummary(x.r);
+    return { id: x.i + 1, bits: s.nBits, kdr: s.kdr, diff: s.diff, span: s.span, hasKeys: s.hasKeys, nist: nt };
   });
-  const isOk = (g) => Number.isFinite(g.bits) && g.bits > 0 && (g.kdr == null || g.kdr === 0);
-  const okGroups = groups.filter(isOk);
-  const failGroups = groups.filter((g) => Number.isFinite(g.bits) && !isOk(g));
-  const missGroups = groups.filter((g) => !Number.isFinite(g.bits));
+  const groupState = (g) => {
+    if (!Number.isFinite(g.bits)) return "miss";
+    if (g.bits === 0) return "fail";
+    if (g.kdr != null && g.kdr !== 0) return "fail";
+    if (g.nist && g.nist.failed.length) return "fail";
+    return "ok";
+  };
+  const groupReasons = (g) => {
+    if (!Number.isFinite(g.bits)) return ["未导入密钥，无法计算该组"];
+    const rs = [];
+    if (g.bits === 0) rs.push("未提取出密钥");
+    if (g.kdr != null && g.kdr !== 0) rs.push(`合法双方密钥不一致 ${num(g.diff)} bit`);
+    if (g.nist && g.nist.failed.length) rs.push(`NIST 未通过：${g.nist.failed.join("、")}`);
+    return rs;
+  };
+  const okGroups = groups.filter((g) => groupState(g) === "ok");
+  const failGroups = groups.filter((g) => groupState(g) === "fail");
+  const missGroups = groups.filter((g) => groupState(g) === "miss");
   const sumOf = (arr, k) => arr.reduce((a, g) => a + (Number.isFinite(g[k]) ? g[k] : 0), 0);
   const known = okGroups.concat(failGroups);
   const batchSpan = sumOf(known, "span");
-  const batchRate = batchSpan > 0 ? sumOf(known, "bits") / batchSpan : null;
+  const batchRate = batchSpan > 0 ? sumOf(okGroups, "bits") / batchSpan : null;
   const okSpan = sumOf(okGroups, "span");
   const okRate = okSpan > 0 ? sumOf(okGroups, "bits") / okSpan : null;
+  const picked = state.groupPick ? groups.find((g) => g.id === state.groupPick) : null;
+  let pickedHtml = "";
+  if (picked) {
+    const st = groupState(picked);
+    const label = st === "ok" ? "成功" : st === "fail" ? "失败" : "缺失";
+    const tone = st === "ok" ? "ok" : st === "fail" ? "bad" : "";
+    const rs = groupReasons(picked);
+    pickedHtml = `<div class="r-gdetail ${st}">
+      <div class="r-gdetail-head">
+        <b>第 ${picked.id} 轮</b>${tag(label, tone)}
+        <button class="r-gdetail-x" data-act="group" data-id="${picked.id}" aria-label="关闭">×</button>
+      </div>
+      <div class="r-gdetail-metrics">
+        <span>提取长度 <b>${Number.isFinite(picked.bits) ? `${num(picked.bits)} bit` : "—"}</b></span>
+        <span>运行时长 <b>${Number.isFinite(picked.span) ? `${picked.span} 秒` : "—"}</b></span>
+        <span>不一致率 <b>${picked.kdr == null ? "—" : pct(picked.kdr, 2)}</b></span>
+        <span>NIST <b>${picked.nist ? `${picked.nist.passed}/${picked.nist.judged}` : "—"}</b></span>
+      </div>
+      ${rs.length
+        ? `<ul class="r-gdetail-list">${rs.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+        : `<p class="r-note">该组全部检查通过，无失败原因。</p>`}
+    </div>`;
+  }
 
   const advice = [
     { t: "调整量化", why: "现有特征未被充分利用时，量化位数与阈值仍有提升空间", how: "在原始三方特征上扫描量化参数，用完整流程净输出比较", gain: "收益待测" },
@@ -3026,7 +3102,7 @@ function pageReport() {
     <section class="rsec">
       <h3>多组结果是否稳定</h3>
       ${groups.length > 1
-        ? `${groupLine(groups)}
+        ? `${groupLine(groups, state.groupPick)}
           <div class="r-rates">
             <div class="r-kpi-card">
               <span class="r-k">完整批次净速率</span>
@@ -3036,7 +3112,8 @@ function pageReport() {
               <span class="r-k">成功组净速率</span>
               <div class="r-val"><b class="r-big">${okRate == null ? "—" : fx(okRate, 1)}</b><span class="r-u">bit/s</span></div>
             </div>
-          </div>`
+          </div>
+          ${pickedHtml}`
         : `<p class="r-note">当前仅 1 组，无法评价组间稳定性。</p>`}
     </section>
 
@@ -3406,6 +3483,7 @@ document.addEventListener("click", async (e) => {
   }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
+  if (act === "group") { const id = Number(el.dataset.id); state.groupPick = state.groupPick === id ? null : id; render(); return; }
   if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
   if (act === "obs-play") { toggleObsPlay(); return; }
   if (act === "obs-step") {
