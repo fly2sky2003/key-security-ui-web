@@ -2839,21 +2839,21 @@ function pageReport() {
   const qAfter = null; // 量化后信息量尚未实现
   const summaryRows = [
     {
-      name: "数据与适用条件",
+      name: "数据与适用条件", icon: "folder",
       body: A
         ? `<span class="r-inline"><b>${num(A.common.length)}</b> 秒三方对齐（${pct(A.ratio)}） · 块数 <b>${num(blockCandidates()[0] ? blockCandidates()[0].n : 0)}</b> · 块间相关 <b>${fx(rhoL, 3)}</b> · ${st ? esc(st.level) : "平稳性未知"}</span>`
         : "尚未导入信道数据",
       judge: checks.length ? tag(`${checksPassed}/${checks.length} 项通过`, checksPassed === checks.length ? "ok" : "warn") : tag("未检查", ""),
     },
     {
-      name: "模拟域 · 信道源",
+      name: "模拟域 · 信道源", icon: "wave",
       body: A
         ? `<div class="r-stage-visual">${waveThumb(A)}<div class="r-stage-kpi"><span class="r-big">${u ? fx(u.base.U, 3) : "—"}</span><span class="r-unit">bit/s · 条件互信息参考</span></div></div>`
         : "尚未导入信道数据",
       judge: ac ? tag(ac.label, ac.tone) : tag("无数据", ""),
     },
     {
-      name: "数字域 · 量化比特",
+      name: "数字域 · 量化比特", icon: "binary",
       body: d
         ? `<div class="r-stage-visual r-bits">${bitMatrix(d.bitsA, 24, "Alice")}${bitMatrix(d.bitsB, 24, "Bob")}${bitMatrix(d.bitsE, 24, "Eve")}
             <div class="r-stage-kpi"><span class="r-big">${pct(d.eveRate, 2)}</span><span class="r-unit">Eve 与合法方不一致率</span>
@@ -2862,7 +2862,7 @@ function pageReport() {
       judge: dc ? tag(dc.label, dc.tone) : tag("无数据", ""),
     },
     {
-      name: "调和与隐私放大",
+      name: "调和与隐私放大", icon: "key",
       body: actual != null
         ? `<span class="r-inline">熵下界 <b>${num(b.hmin)}</b> bit · 公开泄露 <b>− ${num(b.leak)}</b> bit · 其他扣除 <b>− ${num(b.pa + b.other + b.auth)}</b> bit · 最终 <b>${num(actual)}</b> bit · 净速率 <b>${netRate == null ? "—" : fx(netRate, 1)}</b> bit/s</span>`
         : "尚未导入密钥与协议参数",
@@ -2920,9 +2920,18 @@ function pageReport() {
         <div><i>报告时间</i>${new Date().toLocaleString("zh-CN")}</div>
         <div><i>数据指纹</i>#${fingerprint()}</div>
       </div>
-      <div class="r-conclusion-row">
-        <span class="verdict-pill ${p.tone === "bad" ? "bad" : pre ? "warn" : "mute"}">${esc(eligible)}</span>
-        <p class="r-conclusion">${esc(conclusion)}</p>
+      <div class="concl ${p.tone === "bad" ? "bad" : pre ? "warn" : "mute"}">
+        <div class="concl-head">
+          <span class="concl-tag">评估结论</span>
+          <span class="verdict-pill ${p.tone === "bad" ? "bad" : pre ? "warn" : "mute"}">${esc(eligible)}</span>
+        </div>
+        <p class="concl-text">${esc(conclusion)}</p>
+        <div class="concl-pills">
+          <span class="concl-pill"><i>密钥</i><b>${d ? num(d.nBits) : "—"}</b><em>bit</em></span>
+          <span class="concl-pill ${pre ? "ok" : "mute"}"><i>条件熵</i><b>${pre ? num(Math.round(pre.hmin)) : "—"}</b><em>bit</em></span>
+          <span class="concl-pill"><i>熵预算</i><b>${b.raw < 0 ? "不可行" : num(b.safe)}</b><em>${b.raw < 0 ? "" : "bit"}</em></span>
+          <span class="concl-pill"><i>余量</i><b>${actual == null || b.raw < 0 ? "—" : num(b.safe - actual)}</b><em>bit</em></span>
+        </div>
       </div>
     </header>
 
@@ -2930,7 +2939,7 @@ function pageReport() {
       <h3>本次评估结果</h3>
       <div class="stage-table">
         ${summaryRows.map((r) => `<div class="stage-row">
-          <div class="stage-name">${r.name}</div>
+          <div class="stage-name">${ico(r.icon || "check", 15)}${r.name}</div>
           <div class="stage-body">${r.body}</div>
           <div class="stage-judge">${r.judge}</div>
         </div>`).join("")}
