@@ -2752,23 +2752,30 @@ function waveThumb(A, n, w0, h0) {
   return `<svg class="r-wave" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="三方信道波形缩略图">${paths}</svg>`;
 }
 
-function groupDots(items) {
-  if (!items.length) return "";
-  const vals = items.map((x) => x.v).filter((v) => Number.isFinite(v));
+function groupDots(rows) {
+  if (!rows.length) return "";
+  const vals = rows.map((r) => r.bits).filter((v) => Number.isFinite(v));
   if (!vals.length) return `<div class="r-empty">暂无可比较的组结果</div>`;
   const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
   const span = hi - lo || 1;
-  const w = 520, h = 150, pad = { l: 44, r: 16, t: 18, b: 34 };
-  const x = (i) => pad.l + (items.length <= 1 ? (w - pad.l - pad.r) / 2 : (i / (items.length - 1)) * (w - pad.l - pad.r));
+  const w = Math.max(520, rows.length * 96), h = 176, pad = { l: 56, r: 18, t: 26, b: 40 };
+  const x = (i) => pad.l + (rows.length <= 1 ? (w - pad.l - pad.r) / 2 : (i / (rows.length - 1)) * (w - pad.l - pad.r));
   const flat = hi === lo;
   const y = (v) => flat ? pad.t + (h - pad.t - pad.b) / 2 : pad.t + (1 - (v - lo) / span) * (h - pad.t - pad.b);
-  const pts = items.map((it, i) => Number.isFinite(it.v)
-    ? `<circle cx="${x(i).toFixed(1)}" cy="${y(it.v).toFixed(1)}" r="4" fill="var(--blue)" stroke="var(--paper)" stroke-width="2"/>
-       <text x="${x(i).toFixed(1)}" y="${(y(it.v) - 10).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${num(it.v)}</text>`
-    : `<text x="${x(i).toFixed(1)}" y="${(pad.t + 8).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--faint)">未算出</text>`).join("");
-  const xs = items.map((it, i) => `<text x="${x(i).toFixed(1)}" y="${h - 12}" text-anchor="middle" font-size="12" fill="var(--muted)">第 ${it.id} 轮</text>`).join("");
-  const axis = `<line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="var(--line)"/>`;
-  return `<div class="r-dots"><svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="每组密钥长度">${axis}${xs}${pts}</svg></div>`;
+  const pts = rows.map((r, i) => {
+    const cx = x(i).toFixed(1);
+    if (!Number.isFinite(r.bits)) {
+      return `<text x="${cx}" y="${pad.t - 8}" text-anchor="middle" font-size="11.5" fill="var(--faint)">未算出</text>`;
+    }
+    const ok = r.kdr == null || r.kdr === 0;
+    const col = ok ? "var(--blue)" : "var(--red)";
+    return `<circle cx="${cx}" cy="${y(r.bits).toFixed(1)}" r="4.5" fill="${ok ? col : "var(--paper)"}" stroke="${col}" stroke-width="1.6"/>
+      <text x="${cx}" y="${(y(r.bits) - 10).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${num(r.bits)}</text>`;
+  }).join("");
+  const xs = rows.map((r, i) => `<text x="${x(i).toFixed(1)}" y="${h - 14}" text-anchor="middle" font-size="12" fill="var(--muted)">第 ${r.id} 轮</text>`).join("");
+  const axis = `<line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="var(--line)"/>
+    `;
+  return `<div class="r-dots"><svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="每组提取长度点图">${axis}${xs}${pts}</svg></div>`;
 }
 
 const _preNistCache = new Map();
@@ -2911,10 +2918,20 @@ function pageReport() {
   const sameSource = state.rounds
     .map((r, i) => ({ r, i }))
     .filter((x) => x.r.source === activeSource);
-  const groups = sameSource.length > 1
-    ? sameSource.map((x) => { const s = roundStats(x.r); return { id: x.i + 1, v: s.nBits }; })
-    : [];
-  const groupItems = groups.filter((g) => Number.isFinite(g.v)).map((g) => ({ id: g.id, v: g.v }));
+  const groups = sameSource.map((x) => {
+    const s = roundStats(x.r);
+    return { id: x.i + 1, bits: s.nBits, kdr: s.kdr, span: s.span, hasKeys: s.hasKeys };
+  });
+  const isOk = (g) => Number.isFinite(g.bits) && g.bits > 0 && (g.kdr == null || g.kdr === 0);
+  const okGroups = groups.filter(isOk);
+  const failGroups = groups.filter((g) => Number.isFinite(g.bits) && !isOk(g));
+  const missGroups = groups.filter((g) => !Number.isFinite(g.bits));
+  const sumOf = (arr, k) => arr.reduce((a, g) => a + (Number.isFinite(g[k]) ? g[k] : 0), 0);
+  const known = okGroups.concat(failGroups);
+  const batchSpan = sumOf(known, "span");
+  const batchRate = batchSpan > 0 ? sumOf(known, "bits") / batchSpan : null;
+  const okSpan = sumOf(okGroups, "span");
+  const okRate = okSpan > 0 ? sumOf(okGroups, "bits") / okSpan : null;
 
   const advice = [
     { t: "调整量化", why: "现有特征未被充分利用时，量化位数与阈值仍有提升空间", how: "在原始三方特征上扫描量化参数，用完整流程净输出比较", gain: "收益待测" },
@@ -2974,8 +2991,28 @@ function pageReport() {
     <section class="rsec">
       <h3>多组结果是否稳定</h3>
       ${groups.length > 1
-        ? `${groupDots(groupItems)}<p class="r-note">同源共 ${groups.length} 组参与（${state.synthetic ? "合成演示" : "实测采集"}）；纵轴为每组提取长度。${groupItems.length < groups.length ? "部分组未得到密钥长度。" : ""}</p>`
-        : `<p class="r-note">当前仅有 1 组同源数据，无法评价组间稳定性；补充多轮采集后可在此展示分布。</p>`}
+        ? `<div class="r-group-meta">
+            <span>同源组数<b>${groups.length}</b></span>
+            <span>成功<b>${okGroups.length}</b></span>
+            <span>失败<b>${failGroups.length}</b></span>
+            <span>缺失<b>${missGroups.length}</b></span>
+            <span>单位<b>bit</b></span>
+          </div>
+          ${groupDots(groups)}
+          <div class="r-group-stats">
+            <div>
+              <span>完整批次净速率</span>
+              <b>${batchRate == null ? "—" : fx(batchRate, 1)}</b><em>bit/s</em>
+              <i>总安全比特 ÷ 总运行时长；失败组输出计 0，耗时保留</i>
+            </div>
+            <div>
+              <span>成功组净速率</span>
+              <b>${okRate == null ? "—" : fx(okRate, 1)}</b><em>bit/s</em>
+              <i>仅统计成功组：成功组安全比特 ÷ 成功组时长</i>
+            </div>
+          </div>
+          <p class="r-note">${missGroups.length ? `另有 ${missGroups.length} 组未算出密钥，单独列出、不计入统计。` : ""}未执行候选方案评估，仅显示当前方案；组间分布反映各轮差异，不是估计器置信区间。</p>`
+        : `<p class="r-note">当前仅 1 组，无法评价组间稳定性。</p>`}
     </section>
 
     <section class="rsec">
