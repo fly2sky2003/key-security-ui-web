@@ -2731,10 +2731,10 @@ function bitMatrix(bits, side, label) {
   return `<figure class="r-matrix"><svg viewBox="0 0 ${w} ${w}" width="${w}" height="${w}" role="img" aria-label="${esc(label)}"><rect x="0" y="0" width="${w}" height="${w}" fill="var(--paper)"/>${rects}</svg><figcaption>${esc(label)}</figcaption></figure>`;
 }
 
-function waveThumb(A, n) {
+function waveThumb(A, n, w0, h0) {
   if (!A) return `<div class="r-empty">波形未提供</div>`;
-  const m = Math.min(n || 72, A.common.length);
-  const w = 260, h = 64, pad = 4;
+  const m = Math.min(n || 96, A.common.length);
+  const w = w0 || 380, h = h0 || 104, pad = 5;
   const all = [];
   A.present.forEach((p) => { for (let i = 0; i < m; i++) all.push(A.series[p][i]); });
   const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
@@ -2831,7 +2831,7 @@ function pageReport() {
     : p.tone === "bad"
       ? "当前场景不满足本版模型的适用条件，不对模拟域与数字域给出数值结论。"
       : pre
-        ? "本批次合法双方存在共享信息，放大前比特已提供，整段条件最小熵可估计；实际提取长度未超出熵预算。"
+        ? "本批次合法双方存在共享信息，实际提取的密钥长度未超出熵预算。"
         : (ac && ac.label === "不可量化")
           ? "本批次合法双方存在共享信息；但采集时长不足以支撑块间独立，模拟域只能作描述性分析，最终安全长度仍待验证。"
           : "本批次合法双方存在共享信息；模拟域给出模型下的参考值，最终安全长度仍取决于条件熵下界。";
@@ -2841,30 +2841,55 @@ function pageReport() {
     {
       name: "数据与适用条件", icon: "folder",
       body: A
-        ? `<span class="r-inline"><b>${num(A.common.length)}</b> 秒三方对齐（${pct(A.ratio)}） · 块数 <b>${num(blockCandidates()[0] ? blockCandidates()[0].n : 0)}</b> · 块间相关 <b>${fx(rhoL, 3)}</b> · ${st ? esc(st.level) : "平稳性未知"}</span>`
+        ? `<div class="r-metrics">
+            <div><span>三方对齐</span><b>${num(A.common.length)} 秒</b></div>
+            <div><span>重叠比例</span><b>${pct(A.ratio)}</b></div>
+            <div><span>块数</span><b>${num(blockCandidates()[0] ? blockCandidates()[0].n : 0)}</b></div>
+            <div><span>块间相关</span><b>${fx(rhoL, 3)}</b></div>
+            <div><span>平稳性</span><b>${st ? esc(st.level) : "未知"}</b></div>
+          </div>`
         : "尚未导入信道数据",
       judge: checks.length ? tag(`${checksPassed}/${checks.length} 项通过`, checksPassed === checks.length ? "ok" : "warn") : tag("未检查", ""),
     },
     {
       name: "模拟域 · 信道源", icon: "wave",
       body: A
-        ? `<div class="r-stage-visual">${waveThumb(A)}<div class="r-stage-kpi"><span class="r-big">${u ? fx(u.base.U, 3) : "—"}</span><span class="r-unit">bit/s · 条件互信息参考</span></div></div>`
+        ? `<div class="r-stage-visual">
+            <div class="r-visual">${waveThumb(A, 96)}</div>
+            <div class="r-kpi-col">
+              <b class="r-big">${u ? fx(u.base.U, 3) : "—"}</b>
+              <span class="r-unit">bit/s</span>
+              <span class="r-attr">条件互信息参考</span>
+            </div>
+          </div>`
         : "尚未导入信道数据",
       judge: ac ? tag(ac.label, ac.tone) : tag("无数据", ""),
     },
     {
       name: "数字域 · 量化比特", icon: "binary",
       body: d
-        ? `<div class="r-stage-visual r-bits">${bitMatrix(d.bitsA, 24, "Alice")}${bitMatrix(d.bitsB, 24, "Bob")}${bitMatrix(d.bitsE, 24, "Eve")}
-            <div class="r-stage-kpi"><span class="r-big">${pct(d.eveRate, 2)}</span><span class="r-unit">Eve 与合法方不一致率</span>
-            <span class="r-mini">合法方不一致 ${pct(d.kdr, 2)} · 单块最小熵 ${fx(d.groups[8].hmin, 3)} bit</span></div></div>`
+        ? `<div class="r-stage-visual">
+            <div class="r-visual r-bits">${bitMatrix(d.bitsA, 22, "Alice")}${bitMatrix(d.bitsB, 22, "Bob")}${bitMatrix(d.bitsE, 22, "Eve")}</div>
+            <div class="r-kpi-col">
+              <b class="r-big">${pct(d.eveRate, 2)}</b>
+              <span class="r-unit">Eve 与合法方不一致率</span>
+              <span class="r-attr">合法方 ${pct(d.kdr, 2)}</span>
+              <span class="r-attr">单块最小熵 ${fx(d.groups[8].hmin, 3)} bit</span>
+            </div>
+          </div>`
         : "尚未导入密钥",
       judge: dc ? tag(dc.label, dc.tone) : tag("无数据", ""),
     },
     {
       name: "调和与隐私放大", icon: "key",
       body: actual != null
-        ? `<span class="r-inline">熵下界 <b>${num(b.hmin)}</b> bit · 公开泄露 <b>− ${num(b.leak)}</b> bit · 其他扣除 <b>− ${num(b.pa + b.other + b.auth)}</b> bit · 最终 <b>${num(actual)}</b> bit · 净速率 <b>${netRate == null ? "—" : fx(netRate, 1)}</b> bit/s</span>`
+        ? `<div class="r-metrics">
+            <div><span>熵下界</span><b>${num(b.hmin)} bit</b></div>
+            <div><span>公开泄露</span><b>− ${num(b.leak)} bit</b></div>
+            <div><span>其他扣除</span><b>− ${num(b.pa + b.other + b.auth)} bit</b></div>
+            <div><span>最终长度</span><b>${num(actual)} bit</b></div>
+            <div><span>净速率</span><b>${netRate == null ? "—" : `${fx(netRate, 1)} bit/s`}</b></div>
+          </div>`
         : "尚未导入密钥与协议参数",
       judge: actual == null ? tag("未知", "") : pre ? tag("模型估计", "warn") : tag("条件性预算", "warn"),
     },
@@ -2905,15 +2930,15 @@ function pageReport() {
       <div class="r-title-row">
         <h2>评估报告</h2>
         <div class="r-actions no-print">
-          <button class="btn" data-act="export">导出 JSON</button>
-          <button class="btn" data-act="print">打印 / 另存 PDF</button>
-          <button class="btn ghost" data-act="save-history">存入历史</button>
+          <button class="btn primary" data-act="export">导出 JSON</button>
+          <button class="btn primary" data-act="print">打印 / 另存 PDF</button>
+          <button class="btn primary" data-act="save-history">存入历史</button>
         </div>
       </div>
       <div class="r-meta-grid">
         <div><i>项目</i>城市无线测评</div>
-        <div><i>批次 / 组范围</i>第 ${roundNo} 轮 · 共 ${groupCount} 组</div>
-        <div><i>场景</i>${esc(state.env)} · ${esc(state.motion)} · RIS ${esc(state.ris)}</div>
+        <div><i>轮次</i>第 ${roundNo} 轮 · 共 ${groupCount} 组</div>
+        <div><i>场景</i>${esc(state.env)} · ${esc(state.motion)} · ${state.ris === "有" ? "有" : "无"}RIS</div>
         <div><i>特征</i>${esc(state.feature)} · ${esc(state.csiUse)}</div>
         <div><i>攻击模型</i>${esc(state.attack)} · 信道${esc(state.channel)}</div>
         <div><i>数据</i>${dataMode}${state.synthetic ? "（演示）" : ""}</div>
