@@ -2812,27 +2812,21 @@ function groupLine(rows, pickedId) {
     const tip = `第 ${p.id} 轮 · ${label}${Number.isFinite(p.bits) ? ` · ${num(p.bits)} bit` : ""}`;
     if (st === "miss") {
       const cy = (base - 12).toFixed(1);
-      return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" tabindex="0" role="button" aria-label="${tip}">
+      return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
         <title>${tip}</title>
         <circle cx="${cx}" cy="${cy}" r="5" fill="var(--paper)" stroke="var(--faint)" stroke-width="2" stroke-dasharray="2 2"/>
         <text x="${cx}" y="${(base - 26).toFixed(1)}" text-anchor="middle" font-size="12" fill="var(--faint)">未算出</text>
       </g>`;
     }
     const col = st === "ok" ? "var(--green)" : "var(--red)";
-    return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" tabindex="0" role="button" aria-label="${tip}">
+    return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
       <title>${tip}</title>
       <circle cx="${cx}" cy="${y(p.bits).toFixed(1)}" r="5" fill="${col}" stroke="var(--paper)" stroke-width="2"/>
       <text x="${cx}" y="${(y(p.bits) - 12).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${num(p.bits)}</text>
     </g>`;
   }).join("");
 
-  const legend = `<div class="r-legend">
-    <span><i class="dot ok"></i>成功</span>
-    <span><i class="dot fail"></i>失败</span>
-    <span><i class="dot miss"></i>缺失</span>
-  </div>`;
-
-  return `<div class="r-line">${legend}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每组提取长度折线图，点击数据点查看原因">
+  return `<div class="r-line"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每组提取长度折线图，点击数据点查看原因">
     <defs><linearGradient id="rline" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="var(--blue)" stop-opacity="0.16"/>
       <stop offset="1" stop-color="var(--blue)" stop-opacity="0"/>
@@ -3100,7 +3094,14 @@ function pageReport() {
     </section>
 
     <section class="rsec">
-      <h3>多组结果是否稳定</h3>
+      <div class="r-sec-head">
+        <h3>多组结果是否稳定</h3>
+        ${groups.length > 1 ? `<div class="r-legend">
+          <span><i class="dot ok"></i>成功</span>
+          <span><i class="dot fail"></i>失败</span>
+          <span><i class="dot miss"></i>缺失</span>
+        </div>` : ""}
+      </div>
       ${groups.length > 1
         ? `${groupLine(groups, state.groupPick)}
           <div class="r-rates">
@@ -3459,6 +3460,57 @@ document.addEventListener("change", (e) => {
   if (el.dataset.act === "ris") { state.risOn = el.checked; render(); return; }
 });
 
+/* 数据点悬停提示 */
+function ensureRTip() {
+  let el = document.getElementById("r-tip");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "r-tip";
+    el.className = "r-tip";
+    el.hidden = true;
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function moveRTip(e) {
+  const el = document.getElementById("r-tip");
+  if (!el || el.hidden) return;
+  const pad = 14, w = el.offsetWidth, h = el.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+  if (y + h > window.innerHeight - 8) y = e.clientY - h - pad;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+}
+function groupTipHTML(g) {
+  const st = g.dataset.status;
+  const label = st === "ok" ? "成功" : st === "fail" ? "失败" : "缺失";
+  const bits = g.dataset.bits === "" ? null : Number(g.dataset.bits);
+  let s = `<div class="t-head">第 ${g.dataset.id} 轮 · ${label}</div>`;
+  if (Number.isFinite(bits)) s += `<div>提取 ${num(bits)} bit · 时长 ${g.dataset.span} 秒</div>`;
+  if (g.dataset.nist) s += `<div>NIST ${g.dataset.nist}</div>`;
+  s += `<div class="hint">点击查看${st === "ok" ? "详情" : "失败原因"}</div>`;
+  return s;
+}
+document.addEventListener("mouseover", (e) => {
+  const g = e.target.closest ? e.target.closest(".r-pt") : null;
+  if (!g) return;
+  const el = ensureRTip();
+  el.innerHTML = groupTipHTML(g);
+  el.hidden = false;
+  moveRTip(e);
+});
+document.addEventListener("mousemove", (e) => {
+  const g = e.target.closest ? e.target.closest(".r-pt") : null;
+  if (g) moveRTip(e);
+});
+document.addEventListener("mouseout", (e) => {
+  const g = e.target.closest ? e.target.closest(".r-pt") : null;
+  if (g && !g.contains(e.relatedTarget)) {
+    const el = document.getElementById("r-tip");
+    if (el) el.hidden = true;
+  }
+});
 document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act],[data-tab],[data-jump]");
   if (!el) return;
@@ -3483,7 +3535,7 @@ document.addEventListener("click", async (e) => {
   }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
-  if (act === "group") { const id = Number(el.dataset.id); state.groupPick = state.groupPick === id ? null : id; render(); return; }
+  if (act === "group") { const id = Number(el.dataset.id); state.groupPick = state.groupPick === id ? null : id; const tip0 = document.getElementById("r-tip"); if (tip0) tip0.hidden = true; render(); return; }
   if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
   if (act === "obs-play") { toggleObsPlay(); return; }
   if (act === "obs-step") {
