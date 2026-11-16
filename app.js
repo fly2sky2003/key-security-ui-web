@@ -2885,8 +2885,8 @@ function pageReport() {
       body: actual != null
         ? `<div class="r-metrics">
             <div><span>熵下界</span><b>${num(b.hmin)} bit</b></div>
-            <div><span>公开泄露</span><b>− ${num(b.leak)} bit</b></div>
-            <div><span>其他扣除</span><b>− ${num(b.pa + b.other + b.auth)} bit</b></div>
+            <div><span>公开泄露</span><b>${num(b.leak)} bit</b></div>
+            <div><span>其他扣除</span><b>${num(b.pa + b.other + b.auth)} bit</b></div>
             <div><span>最终长度</span><b>${num(actual)} bit</b></div>
             <div><span>净速率</span><b>${netRate == null ? "—" : `${fx(netRate, 1)} bit/s`}</b></div>
           </div>`
@@ -3019,8 +3019,8 @@ function pageReport() {
           <h4 class="r-sub">纠错与隐私放大预算</h4>
           ${barRows([
             { label: "整段熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: pre ? "info" : "" },
-            { label: "公开泄露", value: b.leak, text: `− ${num(b.leak)} bit` },
-            { label: "其他扣除", value: b.other + b.pa + b.auth, text: `− ${num(b.other + b.pa + b.auth)} bit` },
+            { label: "公开泄露", value: b.leak, text: `${num(b.leak)} bit` },
+            { label: "其他扣除", value: b.other + b.pa + b.auth, text: `${num(b.other + b.pa + b.auth)} bit` },
             { label: "最终长度", value: b.safe, text: `${num(b.safe)} bit`, tone: actual != null && actual <= b.safe ? "ok" : "" },
           ])}
           <p class="r-note">${pre ? "熵下界由合成数据的放大前比特估计。" : "未提供放大前比特，熵下界为假设输入，结果属条件性预算。"}</p>
