@@ -2752,32 +2752,67 @@ function waveThumb(A, n, w0, h0) {
   return `<svg class="r-wave" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="三方信道波形缩略图">${paths}</svg>`;
 }
 
-function groupDots(rows) {
+function groupLine(rows) {
   if (!rows.length) return "";
-  const vals = rows.map((r) => r.bits).filter((v) => Number.isFinite(v));
+  const pts = rows.map((r) => ({ ...r }));
+  const vals = pts.map((p) => p.bits).filter((v) => Number.isFinite(v));
   if (!vals.length) return `<div class="r-empty">暂无可比较的组结果</div>`;
   const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-  const span = hi - lo || 1;
-  const w = Math.max(520, rows.length * 96), h = 176, pad = { l: 56, r: 18, t: 26, b: 40 };
-  const x = (i) => pad.l + (rows.length <= 1 ? (w - pad.l - pad.r) / 2 : (i / (rows.length - 1)) * (w - pad.l - pad.r));
-  const flat = hi === lo;
-  const y = (v) => flat ? pad.t + (h - pad.t - pad.b) / 2 : pad.t + (1 - (v - lo) / span) * (h - pad.t - pad.b);
-  const pts = rows.map((r, i) => {
-    const cx = x(i).toFixed(1);
-    if (!Number.isFinite(r.bits)) {
-      return `<text x="${cx}" y="${pad.t - 8}" text-anchor="middle" font-size="11.5" fill="var(--faint)">未算出</text>`;
-    }
-    const ok = r.kdr == null || r.kdr === 0;
-    const col = ok ? "var(--blue)" : "var(--red)";
-    return `<circle cx="${cx}" cy="${y(r.bits).toFixed(1)}" r="4.5" fill="${ok ? col : "var(--paper)"}" stroke="${col}" stroke-width="1.6"/>
-      <text x="${cx}" y="${(y(r.bits) - 10).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${num(r.bits)}</text>`;
-  }).join("");
-  const xs = rows.map((r, i) => `<text x="${x(i).toFixed(1)}" y="${h - 14}" text-anchor="middle" font-size="12" fill="var(--muted)">第 ${r.id} 轮</text>`).join("");
-  const axis = `<line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="var(--line)"/>
-    `;
-  return `<div class="r-dots"><svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="每组提取长度点图">${axis}${xs}${pts}</svg></div>`;
-}
+  const niceStep = (raw) => {
+    const pow = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const n = (raw || 1) / pow;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * pow;
+  };
+  const step = niceStep((hi - lo) / 3 || Math.max(1, hi * 0.08));
+  const y0 = Math.max(0, Math.floor((lo - step * 0.6) / step) * step);
+  const y1 = Math.ceil((hi + step * 0.6) / step) * step;
+  const tickCount = Math.max(2, Math.round((y1 - y0) / step));
+  const W = 1000, H = 280, pad = { l: 72, r: 28, t: 32, b: 46 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const x = (i) => pad.l + (pts.length <= 1 ? iw / 2 : (i / (pts.length - 1)) * iw);
+  const y = (v) => pad.t + (1 - (v - y0) / (y1 - y0)) * ih;
 
+  let grid = "";
+  for (let k = 0; k <= tickCount; k++) {
+    const gv = y0 + step * k;
+    const gy = y(gv).toFixed(1);
+    grid += `<line x1="${pad.l}" y1="${gy}" x2="${W - pad.r}" y2="${gy}" stroke="var(--line)"${k ? ` stroke-dasharray="3 5"` : ""}/>`;
+    grid += `<text x="${pad.l - 12}" y="${(+gy + 4).toFixed(1)}" text-anchor="end" font-size="12.5" fill="var(--faint)">${num(Math.round(gv))}</text>`;
+  }
+  grid += `<text x="${pad.l - 12}" y="${pad.t - 12}" text-anchor="end" font-size="12" fill="var(--faint)">bit</text>`;
+
+  const xs = pts.map((p, i) => `<text x="${x(i).toFixed(1)}" y="${H - 16}" text-anchor="middle" font-size="12.5" fill="var(--muted)">第 ${p.id} 轮</text>`).join("");
+
+  let d = "", first = -1, last = -1, started = false;
+  pts.forEach((p, i) => {
+    if (!Number.isFinite(p.bits)) { started = false; return; }
+    if (first < 0) first = i;
+    last = i;
+    d += `${started ? "L" : "M"}${x(i).toFixed(1)},${y(p.bits).toFixed(1)}`;
+    started = true;
+  });
+  const base = (H - pad.b).toFixed(1);
+  const area = d ? `<path d="${d}L${x(last).toFixed(1)},${base}L${x(first).toFixed(1)},${base}Z" fill="url(#rline)" stroke="none"/>` : "";
+  const path = d ? `<path d="${d}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : "";
+  const markers = pts.map((p, i) => {
+    const cx = x(i).toFixed(1);
+    if (!Number.isFinite(p.bits)) {
+      return `<text x="${cx}" y="${pad.t - 6}" text-anchor="middle" font-size="12" fill="var(--faint)">未算出</text>`;
+    }
+    const ok = p.kdr == null || p.kdr === 0;
+    const col = ok ? "var(--blue)" : "var(--red)";
+    return `<circle cx="${cx}" cy="${y(p.bits).toFixed(1)}" r="5" fill="${ok ? col : "var(--paper)"}" stroke="${col}" stroke-width="2"/>
+      <text x="${cx}" y="${(y(p.bits) - 12).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${num(p.bits)}</text>`;
+  }).join("");
+
+  return `<div class="r-line"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每组提取长度折线图">
+    <defs><linearGradient id="rline" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--blue)" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="var(--blue)" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}${xs}${area}${path}${markers}
+  </svg></div>`;
+}
 const _preNistCache = new Map();
 function preNistRows() {
   const r = activeRound();
@@ -2991,27 +3026,17 @@ function pageReport() {
     <section class="rsec">
       <h3>多组结果是否稳定</h3>
       ${groups.length > 1
-        ? `<div class="r-group-meta">
-            <span>同源组数<b>${groups.length}</b></span>
-            <span>成功<b>${okGroups.length}</b></span>
-            <span>失败<b>${failGroups.length}</b></span>
-            <span>缺失<b>${missGroups.length}</b></span>
-            <span>单位<b>bit</b></span>
-          </div>
-          ${groupDots(groups)}
-          <div class="r-group-stats">
-            <div>
-              <span>完整批次净速率</span>
-              <b>${batchRate == null ? "—" : fx(batchRate, 1)}</b><em>bit/s</em>
-              <i>总安全比特 ÷ 总运行时长；失败组输出计 0，耗时保留</i>
+        ? `${groupLine(groups)}
+          <div class="r-rates">
+            <div class="r-kpi-card">
+              <span class="r-k">完整批次净速率</span>
+              <div class="r-val"><b class="r-big">${batchRate == null ? "—" : fx(batchRate, 1)}</b><span class="r-u">bit/s</span></div>
             </div>
-            <div>
-              <span>成功组净速率</span>
-              <b>${okRate == null ? "—" : fx(okRate, 1)}</b><em>bit/s</em>
-              <i>仅统计成功组：成功组安全比特 ÷ 成功组时长</i>
+            <div class="r-kpi-card">
+              <span class="r-k">成功组净速率</span>
+              <div class="r-val"><b class="r-big">${okRate == null ? "—" : fx(okRate, 1)}</b><span class="r-u">bit/s</span></div>
             </div>
-          </div>
-          <p class="r-note">${missGroups.length ? `另有 ${missGroups.length} 组未算出密钥，单独列出、不计入统计。` : ""}未执行候选方案评估，仅显示当前方案；组间分布反映各轮差异，不是估计器置信区间。</p>`
+          </div>`
         : `<p class="r-note">当前仅 1 组，无法评价组间稳定性。</p>`}
     </section>
 

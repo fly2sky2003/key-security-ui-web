@@ -1422,3 +1422,10 @@ table.hist-table th:nth-child(6) { width: 120px; }
 @media (max-width: 900px) {
   .report-page .r-group-stats { grid-template-columns: 1fr; }
 }
+/* ---------- 多组折线图 ---------- */
+.report-page .r-line svg { width: 100%; height: auto; display: block; }
+.report-page .r-rates { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.report-page .r-rates .r-kpi-card { flex: 1 1 0; width: auto; }
+@media (max-width: 900px) {
+  .report-page .r-rates { grid-template-columns: 1fr; }
+}
