@@ -2734,7 +2734,7 @@ function bitMatrix(bits, side, label) {
 function waveThumb(A, n, w0, h0) {
   if (!A) return `<div class="r-empty">波形未提供</div>`;
   const m = Math.min(n || 96, A.common.length);
-  const w = w0 || 380, h = h0 || 104, pad = 5;
+  const w = w0 || 470, h = h0 || 118, pad = 5;
   const all = [];
   A.present.forEach((p) => { for (let i = 0; i < m; i++) all.push(A.series[p][i]); });
   const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
@@ -2856,10 +2856,10 @@ function pageReport() {
       body: A
         ? `<div class="r-stage-visual">
             <div class="r-visual">${waveThumb(A, 96)}</div>
-            <div class="r-kpi-col">
-              <b class="r-big">${u ? fx(u.base.U, 3) : "—"}</b>
-              <span class="r-unit">bit/s</span>
-              <span class="r-attr">条件互信息参考</span>
+            <div class="r-kpi-card">
+              <span class="r-k">块条件互信息</span>
+              <div class="r-val"><b class="r-big">${u ? fx(u.base.U, 3) : "—"}</b><span class="r-u">bit/s</span></div>
+              <span class="r-attr">模型参考值</span>
             </div>
           </div>`
         : "尚未导入信道数据",
@@ -2870,9 +2870,9 @@ function pageReport() {
       body: d
         ? `<div class="r-stage-visual">
             <div class="r-visual r-bits">${bitMatrix(d.bitsA, 22, "Alice")}${bitMatrix(d.bitsB, 22, "Bob")}${bitMatrix(d.bitsE, 22, "Eve")}</div>
-            <div class="r-kpi-col">
-              <b class="r-big">${pct(d.eveRate, 2)}</b>
-              <span class="r-unit">Eve 与合法方不一致率</span>
+            <div class="r-kpi-card">
+              <span class="r-k">Eve 与合法方不一致率</span>
+              <div class="r-val"><b class="r-big">${pct(d.eveRate, 2)}</b></div>
               <span class="r-attr">合法方 ${pct(d.kdr, 2)}</span>
               <span class="r-attr">单块最小熵 ${fx(d.groups[8].hmin, 3)} bit</span>
             </div>
