@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    物理层密钥安全评估 · 界面样式
    设计语言：深蓝科技感 + 白纸工作区 + 微光/悬浮/渐进动效
    ============================================================ */
@@ -1250,3 +1250,63 @@ table.hist-table th:nth-child(6) { width: 120px; }
 .concl.warn .concl-brief .num { color: var(--orange); }
 .concl.bad .concl-brief .num { color: var(--red); }
 .concl.mute .concl-brief .num { color: var(--ink); }
+/* ---------- 评估报告（按 2026-11-12 改版说明重做） ---------- */
+.report-page h2 { font-size: 28px; }
+.report-page .r-head { padding-bottom: 20px; border-bottom: 2px solid var(--line); }
+.report-page .r-title-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.report-page .r-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.report-page .r-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 24px; margin-bottom: 20px; }
+.report-page .r-meta-grid div { font-size: 14px; color: var(--ink); }
+.report-page .r-meta-grid i { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); margin-bottom: 3px; letter-spacing: 0.02em; }
+.report-page .r-conclusion-row { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.report-page .r-conclusion { margin: 0; font-size: 18px; line-height: 1.8; flex: 1 1 420px; }
+.report-page .rsec { padding: 26px 0; border-top: 1px solid var(--line); }
+.report-page .rsec > h3 { font-size: 20px; margin: 0 0 16px; }
+.report-page h4.r-sub { font-size: 16px; font-weight: 650; margin: 0 0 10px; }
+.report-page .r-big { font: 650 34px/1.1 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); }
+.report-page .r-unit { font-size: 13px; color: var(--muted); }
+.report-page .r-inline { font-size: 16px; line-height: 1.8; }
+.report-page .r-inline b { font-family: var(--font-num); font-weight: 650; font-size: 17px; }
+.report-page .stage-table { border-top: 1px solid var(--line); }
+.report-page .stage-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 170px; gap: 22px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.report-page .stage-name { font-size: 16px; font-weight: 650; }
+.report-page .stage-body { min-width: 0; }
+.report-page .stage-judge { text-align: right; }
+.report-page .r-stage-visual { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.report-page .r-stage-kpi { display: flex; flex-direction: column; gap: 2px; }
+.report-page .r-mini { font-size: 13px; color: var(--muted); }
+.report-page .r-wave { background: var(--paper-2); border-radius: var(--radius); border: 1px solid var(--line); }
+.report-page .r-matrix { margin: 0; }
+.report-page .r-matrix svg { display: block; border: 1px solid var(--line); }
+.report-page .r-matrix figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
+.report-page .r-note { font-size: 14px; line-height: 1.75; color: var(--muted); margin: 10px 0 0; }
+.report-page .r-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 16px; }
+.report-page .r-kpi { display: flex; flex-direction: column; gap: 4px; padding: 14px 0; border-top: 1px solid var(--line); }
+.report-page .r-kpi .k { font-size: 13px; color: var(--muted); }
+.report-page .r-kpi .u { font-size: 13px; color: var(--faint); }
+.report-page .r-two { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.report-page .r-dots .chart { max-width: 560px; }
+.report-page .r-advice { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+.report-page .r-advice-item { border-left: 2px solid var(--line-strong); padding: 2px 0 2px 14px; }
+.report-page .r-advice-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.report-page .r-advice-head b { font-size: 16px; }
+.report-page .r-gain { font-size: 12.5px; color: var(--faint); }
+.report-page .r-advice p { margin: 6px 0 0; font-size: 14.5px; line-height: 1.7; color: var(--muted); }
+.report-page .r-label { display: inline-block; font-size: 12px; color: var(--blue); margin-right: 6px; }
+.report-page .r-details { border-top: 1px dashed var(--line); padding-top: 14px; }
+.report-page .r-details summary { font-size: 15px; }
+.report-page .r-evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-top: 12px; font-size: 14px; }
+.report-page .r-evidence i { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+.report-page .r-table th { text-transform: none; letter-spacing: 0; }
+.report-page .r-empty { color: var(--faint); font-size: 13.5px; }
+@media (max-width: 900px) {
+  .report-page .r-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-page .stage-row { grid-template-columns: 1fr; gap: 8px; }
+  .report-page .stage-judge { text-align: left; }
+  .report-page .r-two, .report-page .r-advice, .report-page .r-evidence { grid-template-columns: 1fr; }
+  .report-page .r-kpis { grid-template-columns: 1fr; }
+}
+@media print {
+  .report-page .rsec { break-inside: auto; }
+  .report-page .stage-row, .report-page .r-advice-item { break-inside: avoid; }
+}

@@ -1772,8 +1772,8 @@ function zscore(a) {
 }
 
 /* 横向条形：用于熵预算 */
-function barRows(items) {
-  const max = Math.max.apply(null, items.map((x) => Math.abs(x.value) || 0).concat([1]));
+function barRows(items, maxOverride) {
+  const max = maxOverride || Math.max.apply(null, items.map((x) => Math.abs(x.value) || 0).concat([1]));
   return `<div class="bar-rows">${items.map((x) => {
     const pct = Math.max(1, Math.round((Math.abs(x.value) / max) * 100));
     return `<div class="bar-row">
@@ -2715,6 +2715,87 @@ function pageResults() {
    13. 评估报告
    ============================================================ */
 
+/* ---------- 报告页：可视化小件 ---------- */
+
+function bitMatrix(bits, side, label) {
+  if (!bits || !bits.length) return `<figure class="r-matrix r-empty"><figcaption>${esc(label)} · 未提供</figcaption></figure>`;
+  const n = side || 24;
+  const cell = 6, gap = 1, w = n * (cell + gap) - gap;
+  let rects = "";
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const on = bits[y * n + x] ? 1 : 0;
+      rects += `<rect x="${x * (cell + gap)}" y="${y * (cell + gap)}" width="${cell}" height="${cell}" rx="1" fill="${on ? "var(--ink)" : "var(--base-2)"}"/>`;
+    }
+  }
+  return `<figure class="r-matrix"><svg viewBox="0 0 ${w} ${w}" width="${w}" height="${w}" role="img" aria-label="${esc(label)}"><rect x="0" y="0" width="${w}" height="${w}" fill="var(--paper)"/>${rects}</svg><figcaption>${esc(label)}</figcaption></figure>`;
+}
+
+function waveThumb(A, n) {
+  if (!A) return `<div class="r-empty">波形未提供</div>`;
+  const m = Math.min(n || 72, A.common.length);
+  const w = 260, h = 64, pad = 4;
+  const all = [];
+  A.present.forEach((p) => { for (let i = 0; i < m; i++) all.push(A.series[p][i]); });
+  const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+  const span = hi - lo || 1;
+  const paths = A.present.map((p) => {
+    const color = p === "ue" ? "var(--blue)" : p === "nb" ? "var(--green)" : "var(--orange)";
+    let d = "";
+    for (let i = 0; i < m; i++) {
+      const x = pad + (i / Math.max(1, m - 1)) * (w - pad * 2);
+      const y = pad + (1 - (A.series[p][i] - lo) / span) * (h - pad * 2);
+      d += `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.4" opacity="0.9"/>`;
+  }).join("");
+  return `<svg class="r-wave" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="三方信道波形缩略图">${paths}</svg>`;
+}
+
+function groupDots(items) {
+  if (!items.length) return "";
+  const vals = items.map((x) => x.v).filter((v) => Number.isFinite(v));
+  if (!vals.length) return `<div class="r-empty">暂无可比较的组结果</div>`;
+  const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  const span = hi - lo || 1;
+  const w = 520, h = 150, pad = { l: 44, r: 16, t: 18, b: 34 };
+  const x = (i) => pad.l + (items.length <= 1 ? (w - pad.l - pad.r) / 2 : (i / (items.length - 1)) * (w - pad.l - pad.r));
+  const flat = hi === lo;
+  const y = (v) => flat ? pad.t + (h - pad.t - pad.b) / 2 : pad.t + (1 - (v - lo) / span) * (h - pad.t - pad.b);
+  const pts = items.map((it, i) => Number.isFinite(it.v)
+    ? `<circle cx="${x(i).toFixed(1)}" cy="${y(it.v).toFixed(1)}" r="4" fill="var(--blue)" stroke="var(--paper)" stroke-width="2"/>
+       <text x="${x(i).toFixed(1)}" y="${(y(it.v) - 10).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${num(it.v)}</text>`
+    : `<text x="${x(i).toFixed(1)}" y="${(pad.t + 8).toFixed(1)}" text-anchor="middle" font-size="11.5" fill="var(--faint)">未算出</text>`).join("");
+  const xs = items.map((it, i) => `<text x="${x(i).toFixed(1)}" y="${h - 12}" text-anchor="middle" font-size="12" fill="var(--muted)">第 ${it.id} 轮</text>`).join("");
+  const axis = `<line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="var(--line)"/>`;
+  return `<div class="r-dots"><svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="每组密钥长度">${axis}${xs}${pts}</svg></div>`;
+}
+
+const _preNistCache = new Map();
+function preNistRows() {
+  const r = activeRound();
+  if (!r || !r.pre) return null;
+  if (_preNistCache.has(r.id)) return _preNistCache.get(r.id);
+  const rows = nistSuite(r.pre.a);
+  _preNistCache.set(r.id, rows);
+  return rows;
+}
+
+function groupSummaries() {
+  return state.rounds.map((r, i) => {
+    const s = roundStats(r);
+    return { id: i + 1, source: r.source, nBits: s.nBits, kdr: s.kdr, span: s.span };
+  });
+}
+
+function nistCell(row) {
+  if (!row) return tag("未提供", "");
+  if (row.pass == null) return tag("样本不足", "warn");
+  return tag(row.pass ? "通过" : "未通过", row.pass ? "ok" : "bad");
+}
+
+/* ---------- 评估报告页 ---------- */
+
 function pageReport() {
   const p = premise();
   const ac = analogConclusion();
@@ -2725,149 +2806,239 @@ function pageReport() {
   const A = hasAnalog() ? session().align : null;
   const u = hasAnalog() ? estimateUL(state.L) : null;
   const t = nist();
+  const pre = preStats();
+  const preNist = preNistRows();
+  const rhoL = A ? acfAt(A.common, A.series.ue, state.L) : null;
+  const st = A ? stationarity(A.series.ue) : null;
   const feasible = actual != null && b.raw >= 0 && actual <= b.safe;
   const seconds = Math.max(1, Number(state.pSeconds) || 1);
   const succ = Math.min(100, Math.max(0, Number(state.pSucc) || 0));
   const netRate = actual == null ? null : (actual * (succ / 100)) / seconds;
-  const pre = preStats();
-  const keysOk = Boolean(d && d.same !== false && t && t.passed === t.judged.length);
-  const complete = Boolean(pre && p.tone === "ok" && keysOk && feasible && pre.hmin >= (actual || 0));
-  const verdict = !hasAny()
-    ? { text: "尚未导入", tone: "mute" }
-    : p.tone === "bad" ? { text: "条件不满足", tone: "bad" }
-      : complete ? { text: "满足提取要求", tone: "ok" }
-        : (ac && ac.label === "不可量化") ? { text: "仅描述性分析", tone: "warn" }
-          : { text: "模型下条件性结果", tone: "warn" };
+  const roundNo = state.active + 1;
+  const groupCount = state.rounds.length || 1;
+  const round = activeRound();
+  const dataMode = state.synthetic ? "合成演示数据" : "真实采集数据";
+  const checks = (A ? analogChecks() : []).concat(d ? digitalChecks() : []);
+  const checksPassed = checks.filter((c) => c.tone === "ok").length;
 
-  const findingCard = (o) => `<div class="finding ${o.tone || ""}">
-    <div class="finding-head"><span class="finding-name">${o.name}</span>${o.tag || ""}</div>
-    <div class="finding-kpis">${(o.kpis || []).map((k) => `<div class="finding-kpi"><b class="${k.tone || ""}">${k.v}</b><span>${k.k}</span></div>`).join("")}</div>
-    ${o.meter ? `<div class="finding-meter">
-      <div class="track"><i class="${o.meter.tone || ""}" style="width:${Math.max(2, Math.min(100, o.meter.pct))}%"></i></div>
-      <div class="cap"><span>${o.meter.left}</span><span>${o.meter.right}</span></div>
-    </div>` : ""}
-  </div>`;
+  const eligible = !hasAny() ? "未评估"
+    : p.tone === "bad" ? "条件不满足"
+      : pre ? "模型估计"
+        : (ac && ac.label === "不可量化") ? "描述性统计" : "条件性预算";
 
-  const rhoL = A ? acfAt(A.common, A.series.ue, state.L) : null;
-  const hi = (v) => `<b class="num">${v}</b>`;
-  const findings = [
+  const conclusion = !hasAny()
+    ? "尚未导入数据。导入三方信道与密钥后，本页按阶段汇总评估结果。"
+    : p.tone === "bad"
+      ? "当前场景不满足本版模型的适用条件，不对模拟域与数字域给出数值结论。"
+      : pre
+        ? "本批次合法双方存在共享信息，放大前比特已提供，整段条件最小熵可估计；实际提取长度未超出熵预算。"
+        : (ac && ac.label === "不可量化")
+          ? "本批次合法双方存在共享信息；但采集时长不足以支撑块间独立，模拟域只能作描述性分析，最终安全长度仍待验证。"
+          : "本批次合法双方存在共享信息；模拟域给出模型下的参考值，最终安全长度仍取决于条件熵下界。";
+
+  const qAfter = null; // 量化后信息量尚未实现
+  const summaryRows = [
     {
-      name: "模拟域",
-      tone: ac ? (ac.tone === "ok" ? "ok" : ac.tone === "bad" ? "bad" : "warn") : "",
-      tag: tag(ac ? ac.short : "无数据", ac ? ac.tone : ""),
-      kpis: [
-        { v: u ? fx(u.base.U, 3) : "—", k: "U_L · bit/s" },
-        { v: u && u.base.D != null ? fx(u.base.D, 3) : "—", k: "D_L · bit/s" },
-      ],
-      meter: rhoL == null ? null : {
-        pct: Math.min(1, rhoL) * 100,
-        tone: rhoL <= 0.2 ? "ok" : "warn",
-        left: `块间相关 ρ(${state.L} s) · 判据 ≤ 0.2`, right: fx(rhoL, 3),
-      },
+      name: "数据与适用条件",
+      body: A
+        ? `<span class="r-inline"><b>${num(A.common.length)}</b> 秒三方对齐（${pct(A.ratio)}） · 块数 <b>${num(blockCandidates()[0] ? blockCandidates()[0].n : 0)}</b> · 块间相关 <b>${fx(rhoL, 3)}</b> · ${st ? esc(st.level) : "平稳性未知"}</span>`
+        : "尚未导入信道数据",
+      judge: checks.length ? tag(`${checksPassed}/${checks.length} 项通过`, checksPassed === checks.length ? "ok" : "warn") : tag("未检查", ""),
     },
     {
-      name: "数字域",
-      tone: dc ? (dc.tone === "ok" ? "ok" : dc.tone === "bad" ? "bad" : "warn") : "",
-      tag: tag(dc ? dc.short : "无数据", dc ? dc.tone : ""),
-      kpis: [
-        { v: d ? pct(d.kdr, 2) : "—", k: "合法方 KDR", tone: d ? (d.same ? "ok" : "bad") : "" },
-        { v: d ? pct(d.eveRate, 2) : "—", k: "Eve 与合法方 KDR" },
-        { v: t ? `${t.passed}/${t.judged.length}` : "—", k: "NIST 通过" },
-      ],
-      meter: t ? {
-        pct: (t.passed / Math.max(1, t.judged.length)) * 100,
-        tone: t.passed === t.judged.length ? "ok" : "warn",
-        left: "NIST SP 800-22", right: `${t.passed}/${t.judged.length}`,
-      } : null,
+      name: "模拟域 · 信道源",
+      body: A
+        ? `<div class="r-stage-visual">${waveThumb(A)}<div class="r-stage-kpi"><span class="r-big">${u ? fx(u.base.U, 3) : "—"}</span><span class="r-unit">bit/s · 条件互信息参考</span></div></div>`
+        : "尚未导入信道数据",
+      judge: ac ? tag(ac.label, ac.tone) : tag("无数据", ""),
     },
     {
-      name: "最终判断",
-      tone: actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad",
-      tag: tag(actual == null ? "待密钥" : b.raw < 0 ? "参数不可行" : feasible ? "在预算内" : "超出预算",
-        actual == null ? "" : b.raw < 0 ? "bad" : feasible ? "ok" : "bad"),
-      kpis: pre
-        ? [
-          { v: b.raw < 0 ? "—" : num(b.safe), k: "熵预算 · bit" },
-          { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
-          { v: num(Math.round(pre.hmin)), k: "条件熵 · bit", tone: "ok" },
-        ]
-        : [
-          { v: b.raw < 0 ? "—" : num(b.safe), k: "建议提取 · bit" },
-          { v: actual == null ? "—" : num(actual), k: "实际提取 · bit" },
-          { v: netRate == null ? "—" : fx(netRate, 1), k: "净速率 · bit/s" },
-        ],
-      meter: actual != null && b.safe > 0 ? {
-        pct: Math.min(1, actual / b.safe) * 100,
-        tone: feasible ? "ok" : "bad",
-        left: "预算占用", right: pct(actual / b.safe, 1),
-      } : null,
+      name: "数字域 · 量化比特",
+      body: d
+        ? `<div class="r-stage-visual r-bits">${bitMatrix(d.bitsA, 24, "Alice")}${bitMatrix(d.bitsB, 24, "Bob")}${bitMatrix(d.bitsE, 24, "Eve")}
+            <div class="r-stage-kpi"><span class="r-big">${pct(d.eveRate, 2)}</span><span class="r-unit">Eve 与合法方不一致率</span>
+            <span class="r-mini">合法方不一致 ${pct(d.kdr, 2)} · 单块最小熵 ${fx(d.groups[8].hmin, 3)} bit</span></div></div>`
+        : "尚未导入密钥",
+      judge: dc ? tag(dc.label, dc.tone) : tag("无数据", ""),
+    },
+    {
+      name: "调和与隐私放大",
+      body: actual != null
+        ? `<span class="r-inline">熵下界 <b>${num(b.hmin)}</b> bit · 公开泄露 <b>− ${num(b.leak)}</b> bit · 其他扣除 <b>− ${num(b.pa + b.other + b.auth)}</b> bit · 最终 <b>${num(actual)}</b> bit · 净速率 <b>${netRate == null ? "—" : fx(netRate, 1)}</b> bit/s</span>`
+        : "尚未导入密钥与协议参数",
+      judge: actual == null ? tag("未知", "") : pre ? tag("模型估计", "warn") : tag("条件性预算", "warn"),
     },
   ];
 
+  const nistKeyIds = ["freq", "block", "runs", "dft", "rank", "linear"];
+  const nistRows = nistKeyIds.map((id) => {
+    const after = t ? t.rows.find((r) => r.id === id) : null;
+    const before = preNist ? preNist.find((r) => r.id === id) : null;
+    return `<tr>
+      <td>${after ? after.name : (before ? before.name : id)}</td>
+      <td class="num">${nistCell(before)}</td>
+      <td class="num">${nistCell(after)}</td>
+    </tr>`;
+  }).join("");
+  const nistRest = t ? t.rows.filter((r) => !nistKeyIds.includes(r.id)) : [];
+
+  const activeSource = round ? round.source : null;
+  const sameSource = state.rounds
+    .map((r, i) => ({ r, i }))
+    .filter((x) => x.r.source === activeSource);
+  const groups = sameSource.length > 1
+    ? sameSource.map((x) => { const s = roundStats(x.r); return { id: x.i + 1, v: s.nBits }; })
+    : [];
+  const groupItems = groups.filter((g) => Number.isFinite(g.v)).map((g) => ({ id: g.id, v: g.v }));
+
+  const advice = [
+    { t: "调整量化", why: "现有特征未被充分利用时，量化位数与阈值仍有提升空间", how: "在原始三方特征上扫描量化参数，用完整流程净输出比较", gain: "收益待测" },
+    { t: "增加带宽", why: "可能存在未利用的频域独立信息", how: "采集宽带三方 CSI，评估频率相关与探测开销", gain: "收益待测" },
+    { t: "增加天线", why: "可能存在可利用的空间独立信息", how: "多天线三方观测，评估空间相关、互易校准与开销", gain: "收益待测" },
+    { t: "可信 RIS", why: "环境静态、时间创新较少时可引入可控反射", how: "开关与状态对照、三方观测、Eve 掌握信息核对", gain: "收益待测" },
+    { t: "同步 / 校准 / 调和", why: "合法不一致、交互次数或公开消息成本偏高时", how: "分离噪声、时变与射频链差异，记录协议耗时", gain: "收益待测" },
+  ];
+
   return `
-  <div class="page-head"><h2>评估报告</h2><div class="head-tools"><span class="meta">${d ? num(d.nBits) + " bit" : "无密钥"} · 指纹 #${fingerprint()}</span></div></div>
+  <div class="report-page">
+    <header class="r-head">
+      <div class="r-title-row">
+        <h2>评估报告</h2>
+        <div class="r-actions no-print">
+          <button class="btn" data-act="export">导出 JSON</button>
+          <button class="btn" data-act="print">打印 / 另存 PDF</button>
+          <button class="btn ghost" data-act="save-history">存入历史</button>
+        </div>
+      </div>
+      <div class="r-meta-grid">
+        <div><i>项目</i>城市无线测评</div>
+        <div><i>批次 / 组范围</i>第 ${roundNo} 轮 · 共 ${groupCount} 组</div>
+        <div><i>场景</i>${esc(state.env)} · ${esc(state.motion)} · RIS ${esc(state.ris)}</div>
+        <div><i>特征</i>${esc(state.feature)} · ${esc(state.csiUse)}</div>
+        <div><i>攻击模型</i>${esc(state.attack)} · 信道${esc(state.channel)}</div>
+        <div><i>数据</i>${dataMode}${state.synthetic ? "（演示）" : ""}</div>
+        <div><i>报告时间</i>${new Date().toLocaleString("zh-CN")}</div>
+        <div><i>数据指纹</i>#${fingerprint()}</div>
+      </div>
+      <div class="r-conclusion-row">
+        <span class="verdict-pill ${p.tone === "bad" ? "bad" : pre ? "warn" : "mute"}">${esc(eligible)}</span>
+        <p class="r-conclusion">${esc(conclusion)}</p>
+      </div>
+    </header>
 
-  <div class="concl ${verdict.tone}">
-    <div class="concl-head">
-      <span class="concl-tag">评估结论</span>
-      <span class="verdict-pill ${verdict.tone}">${verdict.text}</span>
-    </div>
-    <div class="concl-pills">
-      <span class="concl-pill"><i>密钥</i><b>${d ? num(d.nBits) : "—"}</b><em>bit</em></span>
-      <span class="concl-pill ${pre ? "ok" : "mute"}"><i>条件熵</i><b>${pre ? num(Math.round(pre.hmin)) : "—"}</b><em>bit</em></span>
-      <span class="concl-pill"><i>熵预算</i><b>${b.raw < 0 ? "不可行" : num(b.safe)}</b><em>${b.raw < 0 ? "" : "bit"}</em></span>
-      <span class="concl-pill"><i>余量</i><b>${actual == null || b.raw < 0 ? "—" : num(b.safe - actual)}</b><em>bit</em></span>
-    </div>
-    <div class="concl-points">
-      <div class="concl-point">
-        <span class="point-tag">模拟域</span>
-        <p>${u
-          ? `这块信道每秒能提供约 ${hi(fx(u.base.U, 3))} 比特的共享信息，前后两段的相关性已降到 ${hi(fx(rhoL, 3))}，${rhoL != null && rhoL <= 0.2 ? "基本可以当作相互独立的样本" : "还没有完全去相关，只能作描述性参考"}。`
-          : "还没有信道数据，暂时无法评价。"}</p>
+    <section class="rsec">
+      <h3>本次评估结果</h3>
+      <div class="stage-table">
+        ${summaryRows.map((r) => `<div class="stage-row">
+          <div class="stage-name">${r.name}</div>
+          <div class="stage-body">${r.body}</div>
+          <div class="stage-judge">${r.judge}</div>
+        </div>`).join("")}
       </div>
-      <div class="concl-point">
-        <span class="point-tag">数字域</span>
-        <p>${d
-          ? `双方密钥${d.same ? "逐位完全一致" : `有 ${hi(num(d.diff))} 比特对不上`}；Eve 与合法方的不一致率为 ${hi(pct(d.eveRate, 2))}，${t.passed === t.judged.length ? `随机性检验 ${hi(t.judged.length)} 项全部通过` : `随机性检验只通过 ${hi(`${t.passed}/${t.judged.length}`)} 项`}；${pre ? `条件最小熵不低于 ${hi(num(Math.round(pre.hmin)))} 比特` : "条件最小熵暂时估算不出来"}。`
-          : "还没有密钥数据，暂时无法评价。"}</p>
+    </section>
+
+    <section class="rsec">
+      <h3>多组结果是否稳定</h3>
+      ${groups.length > 1
+        ? `${groupDots(groupItems)}<p class="r-note">同源共 ${groups.length} 组参与（${state.synthetic ? "合成演示" : "实测采集"}）；纵轴为每组提取长度。${groupItems.length < groups.length ? "部分组未得到密钥长度。" : ""}</p>`
+        : `<p class="r-note">当前仅有 1 组同源数据，无法评价组间稳定性；补充多轮采集后可在此展示分布。</p>`}
+    </section>
+
+    <section class="rsec">
+      <h3>随机性测试汇总</h3>
+      <table class="data r-table">
+        <thead><tr><th>测试项</th><th class="num">放大前</th><th class="num">放大后</th></tr></thead>
+        <tbody>${nistRows}</tbody>
+      </table>
+      ${nistRest.length ? `<details class="r-details"><summary>其余 ${nistRest.length} 项检验</summary>
+        <table class="data r-table"><thead><tr><th>测试项</th><th class="num">放大前</th><th class="num">放大后</th></tr></thead><tbody>
+        ${nistRest.map((r) => {
+          const before = preNist ? preNist.find((x) => x.id === r.id) : null;
+          return `<tr><td>${r.name}</td><td class="num">${nistCell(before)}</td><td class="num">${nistCell(r)}</td></tr>`;
+        }).join("")}
+        </tbody></table></details>` : ""}
+      <p class="r-note">${pre ? "放大前为合成演示提供的量化比特。" : "未提供放大前比特，放大前一列显示为未提供。"} 通过随机性测试，不等于对 Eve 保密。</p>
+    </section>
+
+    <section class="rsec">
+      <h3>优化建议总览</h3>
+      <p class="r-note">尚未执行量化参数比较。当前只有一套量化方案，无法给出候选与增量；需要同一批数据上的候选方案重算后才能比较。</p>
+      <div class="r-kpis">
+        <div class="r-kpi"><span class="k">当前方案输出</span><b class="r-big">${actual == null ? "—" : num(actual)}</b><span class="u">bit · 实测</span></div>
+        <div class="r-kpi"><span class="k">已测候选最佳</span><b class="r-big">—</b><span class="u">未执行比较</span></div>
+        <div class="r-kpi"><span class="k">相对增量</span><b class="r-big">—</b><span class="u">不计算</span></div>
       </div>
-      <div class="concl-point">
-        <span class="point-tag">最终密钥</span>
-        <p>${actual != null && b.raw >= 0
-          ? `实际提取 ${hi(num(actual))} 比特，建议上限为 ${hi(num(b.safe))} 比特，${feasible ? `还留着 ${hi(num(b.safe - actual))} 比特余量` : `超出了 ${hi(num(actual - b.safe))} 比特`}。`
-          : "熵预算暂时不可用，无法判断长度是否合理。"}</p>
+    </section>
+
+    <section class="rsec">
+      <h3>损失主要在哪里</h3>
+      <div class="r-two">
+        <div>
+          <h4 class="r-sub">量化前后信息量对比</h4>
+          ${barRows([
+            { label: "源端参考 U_src", value: u ? u.base.U : 0, text: u ? `${fx(u.base.U, 3)} bit/s` : "—", tone: "info" },
+            { label: "量化后参考 U_q", value: 0, text: "未计算", tone: "" },
+          ], u && u.base.U > 0 ? u.base.U : 1)}
+          <p class="r-note">量化后信息量尚未实现估计，因此不计算“上界下降量”。</p>
+        </div>
+        <div>
+          <h4 class="r-sub">纠错与隐私放大预算</h4>
+          ${barRows([
+            { label: "整段熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: pre ? "info" : "" },
+            { label: "公开泄露", value: b.leak, text: `− ${num(b.leak)} bit` },
+            { label: "其他扣除", value: b.other + b.pa + b.auth, text: `− ${num(b.other + b.pa + b.auth)} bit` },
+            { label: "最终长度", value: b.safe, text: `${num(b.safe)} bit`, tone: actual != null && actual <= b.safe ? "ok" : "" },
+          ])}
+          <p class="r-note">${pre ? "熵下界由合成数据的放大前比特估计。" : "未提供放大前比特，熵下界为假设输入，结果属条件性预算。"}</p>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <section class="rsec">
+      <h3>先调整量化，能改善多少</h3>
+      <p class="r-note">尚未执行量化方案比较。可比较项包括：量化位数、阈值或边界策略、保护区间、保留率、原始不一致率、调和失败率、公开消息与最终净输出。需要同一批原始特征、相同时长与相同 Eve 信息模型下重算。</p>
+    </section>
+
+    <section class="rsec">
+      <h3>进一步提升</h3>
+      <div class="r-advice">
+        ${advice.map((a) => `<div class="r-advice-item">
+          <div class="r-advice-head"><b>${a.t}</b><span class="r-gain">${a.gain}</span></div>
+          <p><span class="r-label">适用</span>${a.why}</p>
+          <p><span class="r-label">验证</span>${a.how}</p>
+        </div>`).join("")}
+      </div>
+    </section>
+
+    <section class="rsec">
+      <details class="r-details">
+        <summary>计算依据与报告记录</summary>
+        <div class="r-evidence">
+          <div><i>数据来源</i>${state.synthetic ? "合成演示数据（程序生成）" : "实测采集会话"}</div>
+          <div><i>组范围</i>第 ${roundNo} 轮 / 共 ${groupCount} 组；本页汇总当前轮</div>
+          <div><i>Eve 信息模型</i>被动窃听；${state.eveObs ? "掌握信道观测" : "不掌握信道观测"}；${state.eveQuant ? "知道公开量化规则" : "不知道量化规则"}；${state.eveOther ? "掌握其他侧信息" : "无其他侧信息"}</div>
+          <div><i>估计方法</i>块均值 + 偏相关；块长 ${state.L} 秒；逐比特独立模型估计条件最小熵</div>
+          <div><i>公开消息</i>码率 ${state.pRate}；公开泄露 ${num(b.leak)} bit；放大余量 ${num(b.pa)} bit；认证预共享 ${num(b.auth)} bit</div>
+          <div><i>未满足条件</i>${pre ? "无（合成数据已提供放大前比特）" : "缺少隐私放大前量化比特，整段条件最小熵无法验证"}</div>
+        </div>
+      </details>
+    </section>
+
+    <section class="rsec">
+      <h3>历史记录</h3>
+      ${state.history.length ? `<div class="hist-wrap"><table class="data hist-table">
+        <thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
+        <tbody>${state.history.map((h) => `<tr>
+          <td>${esc(h.at)}</td>
+          <td class="hist-scene">${esc(h.scene)}</td>
+          <td class="num">${h.L} s</td>
+          <td class="num">${num(h.bits)}</td>
+          <td>${h.analog ? tag(h.analog.short, h.analog.tone) : "—"}</td>
+          <td>${h.digital ? tag(h.digital.short, h.digital.tone) : "—"}</td>
+        </tr>`).join("")}</tbody></table></div>`
+        : `<p class="meta">还没有历史记录。</p>`}
+    </section>
   </div>
-
-  ${card("关键发现", `<div class="findings">${findings.map(findingCard).join("")}</div>`)}
-
-  ${card("秘密熵预算", barRows([
-    { label: "调和前熵下界", value: b.hmin, text: `${num(b.hmin)} bit`, tone: "info" },
-    { label: "公开泄露 λ", value: b.leak, text: `− ${num(b.leak)} bit` },
-    { label: "其他公开信息", value: b.other, text: `− ${num(b.other)} bit` },
-    { label: "隐私放大余量", value: b.pa, text: `− ${num(b.pa)} bit` },
-    { label: "认证预共享", value: b.auth, text: `− ${num(b.auth)} bit` },
-    { label: "建议提取长度", value: b.safe, text: `${num(b.safe)} bit`, tone: "ok" },
-  ]))}
-
-  ${card("报告与历史", `<div class="btn-row no-print">
-      <button class="btn primary" data-act="export">导出 JSON</button>
-      <button class="btn" data-act="print">打印 / 另存 PDF</button>
-      <button class="btn ghost" data-act="save-history">存入历史</button>
-    </div>
-    <div class="divider"></div>
-    ${state.history.length ? `<div class="hist-wrap"><table class="data hist-table">
-      <thead><tr><th>时间</th><th>场景</th><th class="num">块长</th><th class="num">密钥</th><th>模拟域</th><th>数字域</th></tr></thead>
-      <tbody>${state.history.map((h) => `<tr>
-        <td>${esc(h.at)}</td>
-        <td class="hist-scene">${esc(h.scene)}</td>
-        <td class="num">${h.L} s</td>
-        <td class="num">${num(h.bits)}</td>
-        <td>${h.analog ? tag(h.analog.short, h.analog.tone) : "—"}</td>
-        <td>${h.digital ? tag(h.digital.short, h.digital.tone) : "—"}</td>
-      </tr>`).join("")}</tbody></table></div>`
-      : `<p class="meta">还没有历史记录。</p>`}`)}
   `;
 }
 
