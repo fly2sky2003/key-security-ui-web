@@ -185,10 +185,22 @@ function parseCsi(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const acc = new Map();
   let good = 0, bad = 0, t0 = "", t1 = "";
+  let meta = null;
   for (const line of lines) {
     if (!line) continue;
     const p = line.split(",");
     if (p.length < 10) { bad++; continue; }
+    if (!meta) {
+      meta = {
+        tag: (p[0] || "").trim(),
+        rnti: Number(p[1]),
+        pci: Number(p[2]),
+        frame: Number(p[4]),
+        slot: Number(p[5]),
+        symbol: Number(p[6]),
+        rb: Number(p[7]),
+      };
+    }
     const clock = p[3].trim();
     const hm = clock.split(":");
     if (hm.length < 3) { bad++; continue; }
@@ -223,7 +235,7 @@ function parseCsi(text) {
   const secs = [...acc.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([t, o]) => ({ t, v: o.s / o.n, n: o.n, prof: o.p.map((x) => x / o.m) }));
-  return { ok: true, rows: good, bad, t0, t1, secs };
+  return { ok: true, rows: good, bad, t0, t1, secs, meta };
 }
 
 function parseKey(text) {
@@ -2357,10 +2369,16 @@ function slotStrip() {
     const detail = ok
       ? (s.kind === "csi" ? `${num(v.rows)} 行 · ${v.secs.length} s` : `${num(v.lines.length)} 行 · ${num(v.bits)} bit`)
       : (v && !v.ok ? (v.error || "解析失败") : "未载入");
+    const m = ok && s.kind === "csi" && v.meta ? v.meta : null;
+    const nPts = ok && s.kind === "csi" && v.secs[0] && v.secs[0].prof ? v.secs[0].prof.length : 0;
+    const metaLine = m
+      ? [m.tag, Number.isFinite(m.pci) ? `PCI ${m.pci}` : "", Number.isFinite(m.rnti) ? `RNTI ${m.rnti}` : "", Number.isFinite(m.rb) ? `${m.rb} RB` : "", nPts ? `${nPts} 点` : ""].filter(Boolean).join(" · ")
+      : "";
     return `<div class="slot-chip ${ok ? "ok" : ""}">
       <div class="slot-chip-top"><span>${party} · ${s.kind === "csi" ? "信道" : "密钥"}</span><span class="slot-state">${ok ? "已解析" : v && !v.ok ? "失败" : "待载入"}</span></div>
       <div class="slot-chip-name">${ok ? esc(v.name) : "—"}</div>
       <div class="slot-chip-meta">${esc(detail)}</div>
+      ${metaLine ? `<div class="slot-chip-meta">${esc(metaLine)}</div>` : ""}
       <button class="btn file-btn" data-act="pick" data-slot="${s.id}">${ok ? "替换" : "选择"}</button>
     </div>`;
   }).join("")}</div>`;
