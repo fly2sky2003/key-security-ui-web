@@ -258,7 +258,7 @@ function slotOfFile(file) {
   let party = "";
   if (/EVE/.test(path)) party = "eve";
   else if (/PUSCH/.test(path)) party = "nb";
-  else if (/^UE_|_UE_|\/UE\//.test(path)) party = "ue";
+  else if (/(^|\/)UE_|_UE_/.test(path)) party = "ue";
   if (!party) return null;
   const id = party + (isKey ? "Key" : "Csi");
   return SLOTS.find((s) => s.id === id) || null;
@@ -282,29 +282,56 @@ function loadSlot(id, file) {
   });
 }
 
+/* 三方文件的时间戳常相差 1–2 秒，按“时间窗”聚成一轮，而不是精确相等 */
+const IMPORT_WINDOW_S = 3;
+
+function fileTimeOf(name) {
+  const m = name.match(/(\d{8})[_-]?(\d{6})/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const sec = Number(m[2].slice(0, 2)) * 3600 + Number(m[2].slice(2, 4)) * 60 + Number(m[2].slice(4, 6));
+  return { abs: day * 86400 + sec, key: `${m[1]}_${m[2]}` };
+}
+
 async function importFiles(fileList) {
   const files = [...fileList];
-  const groups = new Map();
+  const entries = [];
   for (const file of files) {
     const slot = slotOfFile(file);
     if (!slot) continue;
-    const m = file.name.match(/(\d{8})[_-]?(\d{6})/);
-    const key = m ? `${m[1]}_${m[2]}` : "upload";
-    if (!groups.has(key)) groups.set(key, { slots: {}, files: 0 });
-    const g = groups.get(key);
-    g.slots[slot.id] = await loadSlot(slot.id, file);
-    g.files++;
+    const t = fileTimeOf(file.name);
+    entries.push({ file, slot, t });
   }
-  if (!groups.size) {
+  entries.sort((a, b) => (a.t ? a.t.abs : Infinity) - (b.t ? b.t.abs : Infinity));
+
+  const clusters = [];
+  for (const e of entries) {
+    const last = clusters[clusters.length - 1];
+    const close = last && e.t && last.t && Math.abs(e.t.abs - last.t.abs) <= IMPORT_WINDOW_S;
+    if (close) last.items.push(e);
+    else clusters.push({ t: e.t, anchor: e.t ? e.t.key : null, items: [e] });
+  }
+
+  const groups = clusters.map((c) => {
+    const slots = {};
+    return { key: c.anchor, items: c.items };
+  });
+  for (const g of groups) {
+    for (const e of g.items) {
+      g.slots = g.slots || {};
+      g.slots[e.slot.id] = await loadSlot(e.slot.id, e.file);
+    }
+  }
+  if (!groups.length) {
     toast("没有识别出可用的 CSV / TXT");
     return;
   }
   let added = 0;
-  for (const [key, g] of groups) {
-    const isTs = key !== "upload";
+  for (const g of groups) {
+    const isTs = Boolean(g.key);
     state.rounds.push({
       id: newRoundId(),
-      detail: isTs ? key.replace("_", " ") : `${g.files} 个文件`,
+      detail: isTs ? g.key.replace("_", " ") : `${g.items.length} 个文件`,
       source: "upload",
       slots: g.slots,
     });
