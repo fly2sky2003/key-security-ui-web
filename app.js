@@ -56,7 +56,7 @@ const state = {
   b: 8,
   scrollFit: false,
   checkOpen: null,
-  groupPick: null,
+
   nistOpen: null,
   synthetic: false,
   env: "室外",
@@ -2681,7 +2681,7 @@ function segDigital() {
     }).join("")}</tbody>
   </table>`)}
 
-  ${card("NIST SP 800-22", `<div class="stats" style="margin-bottom:12px">
+  <div id="nist-report">${card("NIST SP 800-22", `<div class="stats" style="margin-bottom:12px">
     ${stat("通过", `${t.passed} / ${t.judged.length}`, "", t.passed === t.judged.length ? "ok" : "warn")}
     ${stat("样本长度", `${num(t.n)} <small>bit · ${t.rows.length} 项检验</small>`, "", "mute")}
     ${stat("可判定", `${t.judged.length} 项`, "", "warn")}
@@ -2692,7 +2692,7 @@ function segDigital() {
       const row = `<tr class="clickable" data-act="nist" data-id="${r.id}"><td>${r.name}</td><td>${r.param || ""}</td>
         <td class="num">${r.p == null ? "—" : fx(r.p, 4)}</td><td class="num">${tag(r.note, r.pass == null ? "warn" : r.pass ? "ok" : "bad")}</td></tr>`;
       return open ? row + `<tr class="note-row"><td colspan="4">${NIST_DOC[r.id] || ""}<br><span class="hint">适用条件：${r.req || "—"}</span></td></tr>` : row;
-    }).join("")}</tbody></table>`)}
+    }).join("")}</tbody></table>`)}</div>
   ${conclusionBar(digitalConclusion())}
   ${stageNav("final", "最终密钥")}
   `;
@@ -2799,7 +2799,7 @@ function waveThumb(A, n, w0, h0) {
   return `<svg class="r-wave" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="三方信道波形缩略图">${paths}</svg>`;
 }
 
-function groupLine(rows, pickedId) {
+function groupLine(rows) {
   if (!rows.length) return "";
   const pts = rows.map((r) => ({ ...r }));
   const statusOf = (g) => {
@@ -2852,19 +2852,19 @@ function groupLine(rows, pickedId) {
   const markers = pts.map((p, i) => {
     const cx = x(i).toFixed(1);
     const st = statusOf(p);
-    const sel = p.id === pickedId ? " sel" : "";
+    const sel = "";
     const label = st === "ok" ? "成功" : st === "fail" ? "失败" : "缺失";
     const tip = `第 ${p.id} 轮 · ${label}${Number.isFinite(p.bits) ? ` · ${num(p.bits)} bit` : ""}`;
     if (st === "miss") {
       const cy = (base - 12).toFixed(1);
-      return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
+      return `<g class="r-pt" data-act="group" data-id="${p.id}" data-idx="${p.idx}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
         <title>${tip}</title>
         <circle cx="${cx}" cy="${cy}" r="5" fill="var(--paper)" stroke="var(--faint)" stroke-width="2" stroke-dasharray="2 2"/>
         <text x="${cx}" y="${(base - 26).toFixed(1)}" text-anchor="middle" font-size="12" fill="var(--faint)">未算出</text>
       </g>`;
     }
     const col = st === "ok" ? "var(--green)" : "var(--red)";
-    return `<g class="r-pt${sel}" data-act="group" data-id="${p.id}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
+    return `<g class="r-pt" data-act="group" data-id="${p.id}" data-idx="${p.idx}" data-status="${st}" data-bits="${Number.isFinite(p.bits) ? p.bits : ""}" data-span="${p.span == null ? "" : p.span}" data-nist="${p.nist ? `${p.nist.passed}/${p.nist.judged}` : ""}" tabindex="0" role="button" aria-label="${tip}">
       <title>${tip}</title>
       <circle cx="${cx}" cy="${y(p.bits).toFixed(1)}" r="5" fill="${col}" stroke="var(--paper)" stroke-width="2"/>
       <text x="${cx}" y="${(y(p.bits) - 12).toFixed(1)}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${num(p.bits)}</text>
@@ -2890,16 +2890,6 @@ function groupNistSummary(r) {
   return nt;
 }
 
-const _preNistCache = new Map();
-function preNistRows() {
-  const r = activeRound();
-  if (!r || !r.pre) return null;
-  if (_preNistCache.has(r.id)) return _preNistCache.get(r.id);
-  const rows = nistSuite(r.pre.a);
-  _preNistCache.set(r.id, rows);
-  return rows;
-}
-
 function groupSummaries() {
   return state.rounds.map((r, i) => {
     const s = roundStats(r);
@@ -2907,11 +2897,6 @@ function groupSummaries() {
   });
 }
 
-function nistCell(row) {
-  if (!row) return tag("未提供", "");
-  if (row.pass == null) return tag("样本不足", "warn");
-  return tag(row.pass ? "通过" : "未通过", row.pass ? "ok" : "bad");
-}
 
 /* ---------- 评估报告页 ---------- */
 
@@ -2924,9 +2909,7 @@ function pageReport() {
   const actual = d ? d.nBits : null;
   const A = hasAnalog() ? session().align : null;
   const u = hasAnalog() ? estimateUL(state.L) : null;
-  const t = nist();
   const pre = preStats();
-  const preNist = preNistRows();
   const rhoL = A ? acfAt(A.common, A.series.ue, state.L) : null;
   const st = A ? stationarity(A.series.ue) : null;
   const feasible = actual != null && b.raw >= 0 && actual <= b.safe;
@@ -3014,17 +2997,7 @@ function pageReport() {
     },
   ];
 
-  const nistKeyIds = ["freq", "block", "runs", "dft", "rank", "linear"];
-  const nistRows = nistKeyIds.map((id) => {
-    const after = t ? t.rows.find((r) => r.id === id) : null;
-    const before = preNist ? preNist.find((r) => r.id === id) : null;
-    return `<tr>
-      <td>${after ? after.name : (before ? before.name : id)}</td>
-      <td class="num">${nistCell(before)}</td>
-      <td class="num">${nistCell(after)}</td>
-    </tr>`;
-  }).join("");
-  const nistRest = t ? t.rows.filter((r) => !nistKeyIds.includes(r.id)) : [];
+
 
   const activeSource = round ? round.source : null;
   const sameSource = state.rounds
@@ -3033,7 +3006,7 @@ function pageReport() {
   const groups = sameSource.map((x) => {
     const s = roundStats(x.r);
     const nt = groupNistSummary(x.r);
-    return { id: x.i + 1, bits: s.nBits, kdr: s.kdr, diff: s.diff, span: s.span, hasKeys: s.hasKeys, nist: nt };
+    return { id: x.i + 1, idx: x.i, bits: s.nBits, kdr: s.kdr, diff: s.diff, span: s.span, hasKeys: s.hasKeys, nist: nt };
   });
   const groupState = (g) => {
     if (!Number.isFinite(g.bits)) return "miss";
@@ -3059,30 +3032,6 @@ function pageReport() {
   const batchRate = batchSpan > 0 ? sumOf(okGroups, "bits") / batchSpan : null;
   const okSpan = sumOf(okGroups, "span");
   const okRate = okSpan > 0 ? sumOf(okGroups, "bits") / okSpan : null;
-  const picked = state.groupPick ? groups.find((g) => g.id === state.groupPick) : null;
-  let pickedHtml = "";
-  if (picked) {
-    const st = groupState(picked);
-    const label = st === "ok" ? "成功" : st === "fail" ? "失败" : "缺失";
-    const tone = st === "ok" ? "ok" : st === "fail" ? "bad" : "";
-    const rs = groupReasons(picked);
-    pickedHtml = `<div class="r-gdetail ${st}">
-      <div class="r-gdetail-head">
-        <b>第 ${picked.id} 轮</b>${tag(label, tone)}
-        <button class="r-gdetail-x" data-act="group" data-id="${picked.id}" aria-label="关闭">×</button>
-      </div>
-      <div class="r-gdetail-metrics">
-        <span>提取长度 <b>${Number.isFinite(picked.bits) ? `${num(picked.bits)} bit` : "—"}</b></span>
-        <span>运行时长 <b>${Number.isFinite(picked.span) ? `${picked.span} 秒` : "—"}</b></span>
-        <span>不一致率 <b>${picked.kdr == null ? "—" : pct(picked.kdr, 2)}</b></span>
-        <span>NIST <b>${picked.nist ? `${picked.nist.passed}/${picked.nist.judged}` : "—"}</b></span>
-      </div>
-      ${rs.length
-        ? `<ul class="r-gdetail-list">${rs.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
-        : `<p class="r-note">该组全部检查通过，无失败原因。</p>`}
-    </div>`;
-  }
-
   const advice = [
     { t: "调整量化", why: "现有特征未被充分利用时，量化位数与阈值仍有提升空间", how: "在原始三方特征上扫描量化参数，用完整流程净输出比较", gain: "收益待测" },
     { t: "增加带宽", why: "可能存在未利用的频域独立信息", how: "采集宽带三方 CSI，评估频率相关与探测开销", gain: "收益待测" },
@@ -3148,7 +3097,7 @@ function pageReport() {
         </div>` : ""}
       </div>
       ${groups.length > 1
-        ? `${groupLine(groups, state.groupPick)}
+        ? `${groupLine(groups)}
           <div class="r-rates">
             <div class="r-kpi-card">
               <span class="r-k">完整批次净速率</span>
@@ -3159,25 +3108,10 @@ function pageReport() {
               <div class="r-val"><b class="r-big">${okRate == null ? "—" : fx(okRate, 1)}</b><span class="r-u">bit/s</span></div>
             </div>
           </div>
-          ${pickedHtml}`
+          `
         : `<p class="r-note">当前仅 1 组，无法评价组间稳定性。</p>`}
     </section>
 
-    <section class="rsec">
-      <h3>随机性测试汇总</h3>
-      <table class="data r-table">
-        <thead><tr><th>测试项</th><th class="num">放大前</th><th class="num">放大后</th></tr></thead>
-        <tbody>${nistRows}</tbody>
-      </table>
-      ${nistRest.length ? `<details class="r-details"><summary>其余 ${nistRest.length} 项检验</summary>
-        <table class="data r-table"><thead><tr><th>测试项</th><th class="num">放大前</th><th class="num">放大后</th></tr></thead><tbody>
-        ${nistRest.map((r) => {
-          const before = preNist ? preNist.find((x) => x.id === r.id) : null;
-          return `<tr><td>${r.name}</td><td class="num">${nistCell(before)}</td><td class="num">${nistCell(r)}</td></tr>`;
-        }).join("")}
-        </tbody></table></details>` : ""}
-      <p class="r-note">${pre ? "放大前为合成演示提供的量化比特。" : "未提供放大前比特，放大前一列显示为未提供。"} 通过随机性测试，不等于对 Eve 保密。</p>
-    </section>
 
     <section class="rsec">
       <h3>优化建议总览</h3>
@@ -3534,7 +3468,7 @@ function groupTipHTML(g) {
   let s = `<div class="t-head">第 ${g.dataset.id} 轮 · ${label}</div>`;
   if (Number.isFinite(bits)) s += `<div>提取 ${num(bits)} bit · 时长 ${g.dataset.span} 秒</div>`;
   if (g.dataset.nist) s += `<div>NIST ${g.dataset.nist}</div>`;
-  s += `<div class="hint">点击查看${st === "ok" ? "详情" : "失败原因"}</div>`;
+  s += `<div class="hint">点击查看该轮 NIST 检验</div>`;
   return s;
 }
 document.addEventListener("mouseover", (e) => {
@@ -3580,7 +3514,20 @@ document.addEventListener("click", async (e) => {
   }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
-  if (act === "group") { const id = Number(el.dataset.id); state.groupPick = state.groupPick === id ? null : id; const tip0 = document.getElementById("r-tip"); if (tip0) tip0.hidden = true; render(); return; }
+  if (act === "group") {
+    const idx = Number(el.dataset.idx);
+    const tip0 = document.getElementById("r-tip");
+    if (tip0) tip0.hidden = true;
+    setActive(idx);
+    state.tab = "results";
+    state.seg = "digital";
+    render();
+    setTimeout(() => {
+      const target = document.getElementById("nist-report");
+      if (target) target.scrollIntoView({ behavior: "auto", block: "start" });
+    }, 250);
+    return;
+  }
   if (act === "round") { setActive(Number(el.dataset.idx)); render(); return; }
   if (act === "obs-play") { toggleObsPlay(); return; }
   if (act === "obs-step") {

@@ -1465,3 +1465,4 @@ table.hist-table th:nth-child(6) { width: 120px; }
 }
 .r-tip .t-head { font-weight: 650; margin-bottom: 2px; }
 .r-tip .hint { color: var(--blue); margin-top: 4px; font-size: 12px; }
+#nist-report { scroll-margin-top: 92px; }
