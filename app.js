@@ -2550,11 +2550,11 @@ function pageInput() {
   ${card("数据", `
     <div class="btn-row" style="margin-bottom:14px">
       <button class="btn primary" data-act="pick-dir">${ico("folder", 14)} 选择会话文件夹</button>
-      <button class="btn" data-act="load-sample">载入实测数据</button>
+      ${state.sampleAvailable === true ? `<button class="btn" data-act="load-sample">载入实测数据</button>` : ""}
       <button class="btn" data-act="load-synth">载入合成演示（4 轮）</button>
       <button class="btn ghost" data-act="clear">清空全部</button>
     </div>
-    ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 14px">本站为公开演示版，<b>未附带实测采集数据</b>。可用「载入合成演示」体验完整流程，或上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位）。</p>` : ""}
+    ${state.sampleAvailable === false ? `<p class="card-subnote" style="margin:0 0 14px">本站不附带实测采集数据：用「选择会话文件夹」上传自己的三方 CSV / TXT（文件名含 UE / PUSCH / EVE 即可自动归位，同一会话的文件会自动并成一轮），或用「载入合成演示」先看完整流程。</p>` : ""}
     ${!state.rounds.length ? emptyBlock : `
       <div class="stats" style="margin-bottom:16px">
         ${stat("轮次", `${state.rounds.length} <small>轮</small>`, "", "info")}
