@@ -3113,15 +3113,6 @@ function pageReport() {
     </section>
 
 
-    <section class="rsec">
-      <h3>优化建议总览</h3>
-      <p class="r-note">尚未执行量化参数比较。当前只有一套量化方案，无法给出候选与增量；需要同一批数据上的候选方案重算后才能比较。</p>
-      <div class="r-kpis">
-        <div class="r-kpi"><span class="k">当前方案输出</span><b class="r-big">${actual == null ? "—" : num(actual)}</b><span class="u">bit · 实测</span></div>
-        <div class="r-kpi"><span class="k">已测候选最佳</span><b class="r-big">—</b><span class="u">未执行比较</span></div>
-        <div class="r-kpi"><span class="k">相对增量</span><b class="r-big">—</b><span class="u">不计算</span></div>
-      </div>
-    </section>
 
     <section class="rsec">
       <h3>损失主要在哪里</h3>
@@ -3147,10 +3138,6 @@ function pageReport() {
       </div>
     </section>
 
-    <section class="rsec">
-      <h3>先调整量化，能改善多少</h3>
-      <p class="r-note">尚未执行量化方案比较。可比较项包括：量化位数、阈值或边界策略、保护区间、保留率、原始不一致率、调和失败率、公开消息与最终净输出。需要同一批原始特征、相同时长与相同 Eve 信息模型下重算。</p>
-    </section>
 
     <section class="rsec">
       <h3>进一步提升</h3>
