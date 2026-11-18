@@ -56,6 +56,7 @@ const state = {
   b: 8,
   scrollFit: false,
   checkOpen: null,
+  evidenceOpen: false,
 
   nistOpen: null,
   synthetic: false,
@@ -3151,17 +3152,20 @@ function pageReport() {
     </section>
 
     <section class="rsec">
-      <details class="r-details">
-        <summary>计算依据与报告记录</summary>
-        <div class="r-evidence">
-          <div><i>数据来源</i>${state.synthetic ? "合成演示数据（程序生成）" : "实测采集会话"}</div>
-          <div><i>组范围</i>第 ${roundNo} 轮 / 共 ${groupCount} 组；本页汇总当前轮</div>
-          <div><i>Eve 信息模型</i>被动窃听；${state.eveObs ? "掌握信道观测" : "不掌握信道观测"}；${state.eveQuant ? "知道公开量化规则" : "不知道量化规则"}；${state.eveOther ? "掌握其他侧信息" : "无其他侧信息"}</div>
-          <div><i>估计方法</i>块均值 + 偏相关；块长 ${state.L} 秒；逐比特独立模型估计条件最小熵</div>
-          <div><i>公开消息</i>码率 ${state.pRate}；公开泄露 ${num(b.leak)} bit；放大余量 ${num(b.pa)} bit；认证预共享 ${num(b.auth)} bit</div>
-          <div><i>未满足条件</i>${pre ? "无（合成数据已提供放大前比特）" : "缺少隐私放大前量化比特，整段条件最小熵无法验证"}</div>
-        </div>
-      </details>
+      <div class="r-sec-head">
+        <h3>计算依据与报告记录</h3>
+        <button class="btn ghost r-toggle" data-act="evidence">${state.evidenceOpen ? "收起" : "展开"}</button>
+      </div>
+      ${state.evidenceOpen
+        ? `<div class="r-evidence">
+            <div class="r-ev">${ico("folder", 16)}<i>数据来源</i><span>${state.synthetic ? "合成演示数据（程序生成）" : "实测采集会话"}</span></div>
+            <div class="r-ev">${ico("merge", 16)}<i>组范围</i><span>第 ${roundNo} 轮 / 共 ${groupCount} 组；本页汇总当前轮</span></div>
+            <div class="r-ev">${ico("eye", 16)}<i>Eve 信息模型</i><span>被动窃听；${state.eveObs ? "掌握信道观测" : "不掌握信道观测"}；${state.eveQuant ? "知道公开量化规则" : "不知道量化规则"}；${state.eveOther ? "掌握其他侧信息" : "无其他侧信息"}</span></div>
+            <div class="r-ev">${ico("wave", 16)}<i>估计方法</i><span>块均值 + 偏相关；块长 ${state.L} 秒；逐比特独立模型估计条件最小熵</span></div>
+            <div class="r-ev">${ico("key", 16)}<i>公开消息</i><span>码率 ${state.pRate}；公开泄露 ${num(b.leak)} bit；放大余量 ${num(b.pa)} bit；认证预共享 ${num(b.auth)} bit</span></div>
+            <div class="r-ev">${ico("alert", 16)}<i>未满足条件</i><span>${pre ? "无（合成数据已提供放大前比特）" : "缺少隐私放大前量化比特，整段条件最小熵无法验证"}</span></div>
+          </div>`
+        : `<p class="r-note">数据来源、组范围、Eve 信息模型、估计方法、公开消息与未满足条件，展开查看。</p>`}
     </section>
 
     <section class="rsec">
@@ -3501,6 +3505,7 @@ document.addEventListener("click", async (e) => {
   }
   if (act === "check") { state.checkOpen = state.checkOpen === el.dataset.check ? null : el.dataset.check; render(); return; }
   if (act === "nist") { state.nistOpen = state.nistOpen === el.dataset.id ? null : el.dataset.id; render(); return; }
+  if (act === "evidence") { state.evidenceOpen = !state.evidenceOpen; render(); return; }
   if (act === "group") {
     const idx = Number(el.dataset.idx);
     const tip0 = document.getElementById("r-tip");
